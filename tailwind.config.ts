@@ -9,11 +9,34 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Elite Renk Paleti
+        elite: {
+          black: "#111111",
+          gold: "#C9A24D",
+          bone: "#FAF9F6",
+          gray: "#555555",
+        },
         background: "var(--background)",
         foreground: "var(--foreground)",
+      },
+      fontFamily: {
+        serif: ["Playfair Display", "Georgia", "serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        elite: "0 4px 20px rgba(17, 17, 17, 0.08)",
+        "elite-hover": "0 8px 30px rgba(17, 17, 17, 0.12)",
+      },
+      transitionDuration: {
+        "400": "400ms",
+        "600": "600ms",
+      },
+      borderRadius: {
+        elite: "0.625rem",
       },
     },
   },
   plugins: [],
 };
+
 export default config;
