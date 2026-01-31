@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image"; // Resim için Image bileşeni eklendi
 import { ChevronRight, Check, Truck, Shield, RotateCcw } from "lucide-react";
-import { getProduct, getProducts } from "@/lib/actions";
+import { getProduct } from "@/lib/actions";
 import { formatPrice } from "@/lib/utils";
 import PriceCalculator from "@/components/PriceCalculator";
 import type { Metadata } from "next";
@@ -18,15 +18,6 @@ interface ProductPageProps {
   params: Promise<{
     slug: string;
   }>;
-}
-
-// Build sırasında bilinen ürünlerin sayfalarını önceden oluştur
-export async function generateStaticParams() {
-  const { data: products } = await getProducts();
-  if (!products) return [];
-  return products.map((product) => ({
-    slug: product.slug,
-  }));
 }
 
 // SEO (Metadata) Ayarları
