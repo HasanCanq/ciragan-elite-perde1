@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { getAllOrders } from '@/lib/actions';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, OrderStatus, PILE_LABELS_UPPER } from '@/types';
 import { formatPrice } from '@/lib/utils';
-import { Package, Eye, X } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { OrderStatusUpdater } from '../dashboard/OrderStatusUpdater';
 import { OrderDetailModal } from './OrderDetailModal';
 

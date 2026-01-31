@@ -8,7 +8,7 @@ import {
   Phone,
   Mail,
   Clock,
-  Send,
+  
   User,
   MessageSquare,
   Loader2,

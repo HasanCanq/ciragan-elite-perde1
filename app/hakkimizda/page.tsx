@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+
 import { ChevronRight, Scissors, Ruler, Award, Heart } from "lucide-react";
 
 export const metadata = {
