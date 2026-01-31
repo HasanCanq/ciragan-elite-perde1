@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 // BU AYAR ÇOK ÖNEMLİ:
 // Build sırasında listelenmeyen (yeni eklenen) ürünler için 404 verme,
 // sunucuda o an oluşturup kullanıcıya göster.
+export const dynamic = "force-dynamic";
 export const dynamicParams = true; 
 export const revalidate = 60; // Her 60 saniyede bir veriyi tazelemeyi dene
 

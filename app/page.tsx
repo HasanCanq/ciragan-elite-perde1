@@ -3,6 +3,7 @@ import Image from "next/image"; // Resimler için Next.js Image bileşeni
 import { getCategories, getFeaturedProducts } from "@/lib/actions"; 
 import HeroSection from "@/components/HeroSection";
 
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
  

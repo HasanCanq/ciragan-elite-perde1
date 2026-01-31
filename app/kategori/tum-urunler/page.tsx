@@ -5,6 +5,7 @@ import { getProducts } from "@/lib/actions";
 import { formatPrice } from "@/lib/utils";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
