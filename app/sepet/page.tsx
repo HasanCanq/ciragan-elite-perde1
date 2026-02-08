@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -130,7 +130,7 @@ export default function CartPage() {
                   {/* Product Image Placeholder */}
                   <div className="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-elite-gold/20 to-elite-bone rounded-lg flex-shrink-0 flex items-center justify-center">
                     <span className="text-elite-gray/40 text-xs text-center px-2">
-                      {item.productName}
+                      {item.productImage}
                     </span>
                   </div>
 

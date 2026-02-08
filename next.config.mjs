@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -8,15 +10,30 @@ const nextConfig = {
       },
     ],
   },
-  // 👇 İŞTE BU SATIRLAR VERCEL'İN İNADINI KIRACAK
   eslint: {
-    // Uyarıları hata olarak görme, yoksay
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Tip hatalarını yoksay
     ignoreBuildErrors: true,
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Sentry org ve proje bilgileri
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Source map'leri Sentry'ye yukle ama client bundle'a ekleme
+  sourcemaps: {
+    deleteSourcemapsAfterUpload: true,
+  },
+
+  // Build loglarini gizle
+  silent: !process.env.CI,
+
+  // Performans: Otomatik server-side istek izleme
+  autoInstrumentServerFunctions: true,
+
+  // Tunnel: Ad-blocker'lari bypass et
+  tunnelRoute: '/monitoring',
+});

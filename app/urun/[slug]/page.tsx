@@ -1,18 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image"; // Resim için Image bileşeni eklendi
+import Image from "next/image"; 
 import { ChevronRight, Check, Truck, Shield, RotateCcw } from "lucide-react";
 import { getProduct } from "@/lib/actions";
 import { formatPrice } from "@/lib/utils";
 import PriceCalculator from "@/components/PriceCalculator";
 import type { Metadata } from "next";
 
-// BU AYAR ÇOK ÖNEMLİ:
-// Build sırasında listelenmeyen (yeni eklenen) ürünler için 404 verme,
-// sunucuda o an oluşturup kullanıcıya göster.
+
 export const dynamic = "force-dynamic";
 export const dynamicParams = true; 
-export const revalidate = 60; // Her 60 saniyede bir veriyi tazelemeyi dene
+export const revalidate = 60;
 
 interface ProductPageProps {
   params: Promise<{
@@ -24,7 +22,7 @@ interface ProductPageProps {
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   const { data: product } = await getProduct(slug);
-
+  
   if (!product) {
     return {
       title: "Ürün Bulunamadı | Çırağan Elite Perde",
@@ -39,11 +37,11 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     },
   };
 }
-
+ 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
   
-  // Debug için terminale yazdıralım (Sorun anında buraya bak)
+  
   console.log(`[ProductPage] İstenen Slug: ${slug}`);
 
   const { data: product, error } = await getProduct(slug);
@@ -57,15 +55,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
     notFound();
   }
 
-  // Özellikler listesi (İstersen veritabanından da çekilebilir)
-  const features = [
-    "Premium kalite kumaş",
-    "Solmaya karşı dayanıklı",
-    "Kolay temizlenebilir",
-    "2 yıl garanti",
-  ];
-
-  // Ana resim (yoksa placeholder)
+  
+  // const features = [
+  //   "Premium kalite kumaş",
+  //   "Solmaya karşı dayanıklı",
+  //   "Kolay temizlenebilir",
+  //   "2 yıl garanti",
+  // ];
+ 
+ 
+  const features = (product as any)?.ozellikler || [];
+  const categoryData = (product as any)?.category;
+  const finalCategory = typeof categoryData === 'object' 
+    ? categoryData?.name 
+    : (categoryData || 'Diğer');
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
    
   return (
@@ -175,22 +178,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <p className="text-elite-gray leading-relaxed mb-6">
               {product.description || product.short_description || "Bu ürün için açıklama bulunmuyor."}
             </p>
+            {features.length > 0 && (
+      <div className="mb-8">
+        <h3 className="font-medium text-elite-black mb-3">Özellikler</h3>
+        <ul className="grid grid-cols-2 gap-2">
+          {/* TypeScript kızmasın diye feature: string olarak belirttik */}
+          {features.map((feature: string, index: number) => (
+            <li
+              key={index}
+              className="flex items-center gap-2 text-sm text-elite-gray"
+            >
+              <Check className="w-4 h-4 text-elite-gold" />
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+   
+    
 
-            {/* Özellikler */}
-            <div className="mb-8">
-              <h3 className="font-medium text-elite-black mb-3">Özellikler</h3>
-              <ul className="grid grid-cols-2 gap-2">
-                {features.map((feature) => (
-                  <li
-                    key={feature}
-                    className="flex items-center gap-2 text-sm text-elite-gray"
-                  >
-                    <Check className="w-4 h-4 text-elite-gold" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
 
             {/* Fiyat Hesaplayıcı Componenti */}
             <PriceCalculator
@@ -199,6 +206,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               productSlug={product.slug}
               productImage={mainImage}
               m2Price={product.base_price}
+              category={finalCategory}
             />
 
             {/* Güven Rozetleri */}

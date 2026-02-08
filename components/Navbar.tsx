@@ -1,10 +1,9 @@
 "use client";
-
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ShoppingBag, Menu, X, ChevronDown, User } from "lucide-react";
+import { ShoppingBag, Menu, X, Search, User } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
-
 
 const categories = [
   { id: "1", name: "Tül Perdeler", slug: "tul-perdeler" },
@@ -15,130 +14,117 @@ const categories = [
 
 export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const totalItems = useCartStore((state) =>
     state.items.reduce((sum, item) => sum + item.quantity, 0)
   );
+  const setCartOpen = useCartStore((state) => state.setCartOpen);
 
-  // Hydration fix - SSR'da sepet sayısı 0 göster
   useEffect(() => {
     setMounted(true);
+
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
-    <header className="sticky top-0 z-50">
-      {/* Top Header - Koyu Siyah */}
-      <div className="bg-elite-black text-white">
+    <>
+      {/* Top Bar — scrolls away with the page */}
+      <div className="bg-black text-white">
         <div className="elite-container py-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="hidden sm:block text-gray-300">
-              Ücretsiz Kargo | 5.000 TL ve Üzeri Siparişlerde
+          <div className="flex items-center justify-between text-xs font-light tracking-wide">
+            <span className="hidden sm:block text-white/70">
+              Ücretsiz Kargo &nbsp;|&nbsp; 5.000 TL ve Üzeri Siparişlerde
             </span>
-            <div className="flex items-center gap-4 ml-auto">
-              <a
-                href="tel:+902121234567"
-                className="text-gray-300 hover:text-elite-gold transition-colors duration-300"
-              >
-                0532 295 95 86
-              </a>
-              <Link
-                href="/giris"
-                className="hidden sm:flex items-center gap-1 text-gray-300 hover:text-elite-gold transition-colors duration-300"
-              >
-                <User className="w-4 h-4" />
-                Giriş Yap
-              </Link>
-            </div>
+            <a
+              href="tel:05322959586"
+              className="text-white/80 hover:text-white transition-colors duration-300 ml-auto sm:ml-0"
+            >
+              0532 295 95 86
+            </a>
           </div>
         </div>
       </div>
 
-      {/* Main Header - Gold */}
-      <nav className="bg-elite-gold">
+      {/* Main Navbar — sticky white bar */}
+      <nav
+        className={`sticky top-0 z-50 bg-white transition-shadow duration-300 ${
+          scrolled ? "shadow-md" : "shadow-none"
+        }`}
+      >
         <div className="elite-container">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <Link href="/" className="flex items-center">
-              <span className="font-serif text-xl sm:text-2xl font-semibold text-elite-black tracking-tight">
-                Çırağan Elite Perde
-              </span>
+            <Link href="/" className="flex-shrink-0">
+              <Image
+                src="https://httjlhbvqksbdutrqoju.supabase.co/storage/v1/object/public/hero/logo.png"
+                alt="Çırağan Elite Perde"
+                width={160}
+                height={40}
+                priority
+                className="h-10 sm:h-12 w-auto"
+              />
             </Link>
 
-            {/* Desktop Navigation */}
-            <div className="hidden lg:flex items-center gap-8">
-              <Link
-                href="/"
-                className="text-elite-black font-medium hover:opacity-70 transition-opacity duration-300"
-              >
-                Ana Sayfa
-              </Link>
-
-              {/* Categories Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsCategoriesOpen(!isCategoriesOpen)}
-                  onBlur={() => setTimeout(() => setIsCategoriesOpen(false), 150)}
-                  className="flex items-center gap-1 text-elite-black font-medium hover:opacity-70 transition-opacity duration-300"
+            {/* Desktop Categories */}
+            <div className="hidden md:flex items-center gap-8">
+              {categories.map((category) => (
+                <Link
+                  key={category.id}
+                  href={`/kategori/${category.slug}`}
+                  className="text-elite-black font-medium text-[15px] hover:text-elite-gold transition-colors duration-300 relative group py-2"
                 >
-                  Kategoriler
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform duration-300 ${
-                      isCategoriesOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-
-                {isCategoriesOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-lg shadow-elite-hover py-2">
-                    {categories.map((category) => (
-                      <Link
-                        key={category.id}
-                        href={`/kategori/${category.slug}`}
-                        className="block px-4 py-2 text-elite-black hover:bg-elite-bone transition-colors duration-300"
-                      >
-                        {category.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <Link
-                href="/hakkimizda"
-                className="text-elite-black font-medium hover:opacity-70 transition-opacity duration-300"
-              >
-                Hakkımızda
-              </Link>
-
-              <Link
-                href="/iletisim"
-                className="text-elite-black font-medium hover:opacity-70 transition-opacity duration-300"
-              >
-                İletisim
-              </Link>
+                  {category.name}
+                  <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-elite-gold transition-all duration-300 group-hover:w-full" />
+                </Link>
+              ))}
             </div>
 
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-4">
-              {/* Cart */}
+            {/* Right Icons */}
+            <div className="flex items-center gap-1 sm:gap-3">
+              {/* Search */}
               <Link
-                href="/sepet"
-                className="relative p-2 text-elite-black hover:opacity-70 transition-opacity duration-300"
+                href="/kategori/tum-urunler"
+                className="p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
+                aria-label="Ürün Ara"
               >
-                <ShoppingBag className="w-6 h-6" />
+                <Search className="w-5 h-5" />
+              </Link>
+
+              {/* Account */}
+              <Link
+                href="/hesabim"
+                className="p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
+                aria-label="Hesabım"
+              >
+                <User className="w-5 h-5" />
+              </Link>
+
+              {/* Cart */}
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
+                aria-label="Sepeti Aç"
+              >
+                <ShoppingBag className="w-5 h-5" />
                 {mounted && totalItems > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-elite-black text-white text-xs rounded-full flex items-center justify-center font-medium">
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-elite-gold text-white text-[11px] rounded-full flex items-center justify-center font-bold">
                     {totalItems > 99 ? "99+" : totalItems}
                   </span>
                 )}
-              </Link>
+              </button>
 
-              {/* Mobile Menu Button */}
+              {/* Mobile Toggle */}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="lg:hidden p-2 text-elite-black"
+                className="md:hidden p-2 text-elite-black hover:text-elite-gold transition-colors"
+                aria-label="Menüyü Aç/Kapat"
               >
                 {isMenuOpen ? (
                   <X className="w-6 h-6" />
@@ -150,60 +136,44 @@ export default function Navbar() {
           </div>
         </div>
 
+        {/* Bottom border — subtle separator */}
+        <div className="border-b border-gray-100" />
+
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="lg:hidden bg-elite-gold border-t border-elite-black/10">
+          <div className="md:hidden bg-white border-t border-gray-100 absolute w-full left-0 top-full shadow-lg">
             <div className="elite-container py-4">
-              <div className="flex flex-col gap-4">
-                <Link
-                  href="/"
-                  className="text-elite-black font-medium py-2"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Ana Sayfa
-                </Link>
-
-                <div>
-                  <span className="text-elite-black/60 text-sm uppercase tracking-wider">
-                    Kategoriler
-                  </span>
-                  <div className="mt-2 flex flex-col gap-2">
-                    {categories.map((category) => (
-                      <Link
-                        key={category.id}
-                        href={`/kategori/${category.slug}`}
-                        className="text-elite-black font-medium py-1 pl-4"
-                        onClick={() => setIsMenuOpen(false)}
-                      >
-                        {category.name}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-
-                <Link href="/hakkimizda" className="hover:text-elite-gold transition-colors">
-  Hakkımızda
-</Link>
-
-                <Link href="/iletişim" className="hover:text-elite-gold transition-colors">
-  İletişim
-</Link>
-
-                <div className="border-t border-elite-black/10 pt-4">
+              <div className="flex flex-col">
+                {categories.map((category) => (
                   <Link
-                    href="/giris"
-                    className="flex items-center gap-2 text-elite-black font-medium py-2"
+                    key={category.id}
+                    href={`/kategori/${category.slug}`}
+                    className="text-elite-black font-medium py-3 px-4 border-l-2 border-transparent hover:border-elite-gold hover:bg-gray-50 transition-all"
                     onClick={() => setIsMenuOpen(false)}
                   >
-                    <User className="w-5 h-5" />
-                    Giriş Yap / Kayıt Ol
+                    {category.name}
                   </Link>
-                </div>
+                ))}
+                <div className="h-px bg-gray-100 my-3 mx-4" />
+                <Link
+                  href="/hakkimizda"
+                  className="text-gray-500 hover:text-elite-black py-2 px-4 text-sm transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Hakkımızda
+                </Link>
+                <Link
+                  href="/iletisim"
+                  className="text-gray-500 hover:text-elite-black py-2 px-4 text-sm transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  İletişim
+                </Link>
               </div>
             </div>
           </div>
         )}
       </nav>
-    </header>
+    </>
   );
 }

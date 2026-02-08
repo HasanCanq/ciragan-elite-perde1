@@ -97,10 +97,21 @@ export async function getProduct(slug: string): Promise<ApiResponse<ProductWithC
 }
 
 /**
- * Kategoriye göre ürünleri getir
+ * Filtreleme ve sıralama parametreleri
+ */
+export interface ProductFilters {
+  minPrice?: number;
+  maxPrice?: number;
+  sortOrder?: 'recommended' | 'price_asc' | 'price_desc' | 'newest' | 'name_asc' | 'name_desc';
+  inStockOnly?: boolean;
+}
+
+/**
+ * Kategoriye göre ürünleri getir (filtreleme ve sıralama destekli)
  */
 export async function getProductsByCategory(
-  categorySlug: string
+  categorySlug: string,
+  filters?: ProductFilters
 ): Promise<ApiResponse<ProductWithCategory[]>> {
   try {
     const supabase = await createClient();
@@ -114,15 +125,56 @@ export async function getProductsByCategory(
 
     if (catError) throw catError;
 
-    const { data, error } = await supabase
+    // Base query
+    let query = supabase
       .from('products')
       .select(`
         *,
         category:categories(*)
       `)
       .eq('category_id', category.id)
-      .eq('is_published', true)
-      .order('created_at', { ascending: false });
+      .eq('is_published', true);
+
+    // Apply filters
+    if (filters?.minPrice !== undefined && filters.minPrice > 0) {
+      query = query.gte('base_price', filters.minPrice);
+    }
+
+    if (filters?.maxPrice !== undefined && filters.maxPrice > 0) {
+      query = query.lte('base_price', filters.maxPrice);
+    }
+
+    if (filters?.inStockOnly) {
+      query = query.eq('in_stock', true);
+    }
+
+    // Apply sorting
+    switch (filters?.sortOrder) {
+      case 'price_asc':
+        query = query.order('base_price', { ascending: true });
+        break;
+      case 'price_desc':
+        query = query.order('base_price', { ascending: false });
+        break;
+      case 'newest':
+        query = query.order('created_at', { ascending: false });
+        break;
+      case 'name_asc':
+        query = query.order('name', { ascending: true });
+        break;
+      case 'name_desc':
+        query = query.order('name', { ascending: false });
+        break;
+      case 'recommended':
+      default:
+        // Default: newest first, then by stock status
+        query = query
+          .order('in_stock', { ascending: false })
+          .order('created_at', { ascending: false });
+        break;
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -133,6 +185,81 @@ export async function getProductsByCategory(
     };
   } catch (error) {
     console.error('getProductsByCategory error:', error);
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Ürünler yüklenemedi',
+      success: false,
+    };
+  }
+}
+
+/**
+ * Tüm ürünleri getir (filtreleme ve sıralama destekli)
+ */
+export async function getAllProductsFiltered(
+  filters?: ProductFilters
+): Promise<ApiResponse<ProductWithCategory[]>> {
+  try {
+    const supabase = await createClient();
+
+    // Base query
+    let query = supabase
+      .from('products')
+      .select(`
+        *,
+        category:categories(*)
+      `)
+      .eq('is_published', true);
+
+    // Apply filters
+    if (filters?.minPrice !== undefined && filters.minPrice > 0) {
+      query = query.gte('base_price', filters.minPrice);
+    }
+
+    if (filters?.maxPrice !== undefined && filters.maxPrice > 0) {
+      query = query.lte('base_price', filters.maxPrice);
+    }
+
+    if (filters?.inStockOnly) {
+      query = query.eq('in_stock', true);
+    }
+
+    // Apply sorting
+    switch (filters?.sortOrder) {
+      case 'price_asc':
+        query = query.order('base_price', { ascending: true });
+        break;
+      case 'price_desc':
+        query = query.order('base_price', { ascending: false });
+        break;
+      case 'newest':
+        query = query.order('created_at', { ascending: false });
+        break;
+      case 'name_asc':
+        query = query.order('name', { ascending: true });
+        break;
+      case 'name_desc':
+        query = query.order('name', { ascending: false });
+        break;
+      case 'recommended':
+      default:
+        query = query
+          .order('in_stock', { ascending: false })
+          .order('created_at', { ascending: false });
+        break;
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return {
+      data: data as ProductWithCategory[],
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('getAllProductsFiltered error:', error);
     return {
       data: null,
       error: error instanceof Error ? error.message : 'Ürünler yüklenemedi',

@@ -12,6 +12,7 @@ const config: Config = {
         // Elite Renk Paleti
         elite: {
           black: "#111111",
+          brown: "#2F1B12",
           gold: "#C9A24D",
           bone: "#FAF9F6",
           gray: "#555555",

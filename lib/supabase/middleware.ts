@@ -40,10 +40,29 @@ export async function updateSession(request: NextRequest) {
 
   // Admin rotaları koruması
   if (request.nextUrl.pathname.startsWith('/admin')) {
+    // Admin login sayfasına erişime izin ver
+    if (request.nextUrl.pathname === '/admin/login') {
+      // Eğer kullanıcı zaten giriş yapmışsa ve admin ise dashboard'a yönlendir
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.role === 'ADMIN') {
+          const url = request.nextUrl.clone();
+          url.pathname = '/admin/dashboard';
+          return NextResponse.redirect(url);
+        }
+      }
+      return supabaseResponse;
+    }
+
+    // Diğer admin sayfaları için kimlik doğrulama gerekli
     if (!user) {
       const url = request.nextUrl.clone();
-      url.pathname = '/giris';
-      url.searchParams.set('redirect', request.nextUrl.pathname);
+      url.pathname = '/admin/login';
       return NextResponse.redirect(url);
     }
 
@@ -56,7 +75,7 @@ export async function updateSession(request: NextRequest) {
 
     if (!profile || profile.role !== 'ADMIN') {
       const url = request.nextUrl.clone();
-      url.pathname = '/';
+      url.pathname = '/admin/login';
       return NextResponse.redirect(url);
     }
   }

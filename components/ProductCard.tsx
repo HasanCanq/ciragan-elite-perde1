@@ -1,17 +1,17 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
-import { ProductWithCategory } from "@/types"; // 👈 DİKKAT: Tipi değiştirdik
+import { ProductWithCategory } from "@/types"; 
 import { formatPrice } from "@/lib/utils";
 
 interface ProductCardProps {
-  // Sadece Product değil, Kategori bilgisi olan Product istiyoruz
+  
   product: ProductWithCategory; 
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
   
-  // Resim kontrolü: Resim var mı ve geçerli bir URL mi?
+ 
   const mainImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
   return (
@@ -19,9 +19,9 @@ export default function ProductCard({ product }: ProductCardProps) {
       <article className="bg-white rounded-lg overflow-hidden shadow-elite transition-all duration-400 hover:shadow-elite-hover hover:-translate-y-1 h-full flex flex-col">
         
         {/* --- RESİM ALANI --- */}
-        <div className="relative aspect-[4/5] overflow-hidden bg-elite-bone">
+        <div className="relative aspect-[2/3] md:aspect-[3/4] lg:aspect-[4/5] overflow-hidden bg-elite-bone">
           
-          {/* Resim Yoksa Gösterilecek Arkaplan */}
+          {/* Resim Yoksa Arkaplan */}
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-elite-bone to-gray-100">
             <span className="font-serif text-elite-gray/40 text-lg">
               Resim Yok
@@ -39,7 +39,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             />
           )}
 
-          {/* Kategori Etiketi (ID yerine İSİM yazıyoruz) */}
+          {/* Kategori Etiketi  */}
           {product.category && (
             <div className="absolute top-4 left-4 z-10">
               <span className="inline-block px-3 py-1 bg-elite-black/80 text-white text-xs font-medium rounded-full backdrop-blur-sm">

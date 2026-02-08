@@ -107,6 +107,7 @@ export interface Product {
   meta_description: string | null;
   created_at: string;
   updated_at: string;
+  ozellikler: string | null;
 }
 
 // Kategori bilgisiyle birlikte ürün

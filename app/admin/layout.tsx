@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import {
@@ -45,8 +44,10 @@ export default async function AdminLayout({
 }) {
   const adminData = await getAdminUser();
 
+  // If not admin, render children without sidebar (login page)
+  // Middleware ensures only login page is accessible without admin auth
   if (!adminData) {
-    redirect('/');
+    return <>{children}</>;
   }
 
   const { profile } = adminData;

@@ -181,7 +181,7 @@ export default function AboutPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/iletisim" className="elite-button">
-              İletişime Geç
+              İletisime Geç
             </Link>
             <Link href="/kategori/tum-urunler" className="elite-button-outline">
               Ürünleri Keşfet

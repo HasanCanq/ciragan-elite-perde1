@@ -13,16 +13,30 @@ const heroImages = [
 export default function HeroSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Otomatik geçiş
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % heroImages.length);
+      nextSlide();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [currentIndex]); // currentIndex değiştiğinde sayacı sıfırlasın ki kullanıcı tıkladıktan hemen sonra resim değişmesin
+
+  const prevSlide = () => {
+    const isFirstSlide = currentIndex === 0;
+    const newIndex = isFirstSlide ? heroImages.length - 1 : currentIndex - 1;
+    setCurrentIndex(newIndex);
+  };
+
+  const nextSlide = () => {
+    const isLastSlide = currentIndex === heroImages.length - 1;
+    const newIndex = isLastSlide ? 0 : currentIndex + 1;
+    setCurrentIndex(newIndex);
+  };
 
   return (
-    <section className="relative h-[600px] md:h-[700px] overflow-hidden">
+    <section className="relative h-[600px] md:h-[700px] overflow-hidden group">
+      {/* Resimler */}
       {heroImages.map((image, index) => (
         <div
           key={image}
@@ -41,15 +55,18 @@ export default function HeroSection() {
         </div>
       ))}
 
+      {/* Siyah Opak Katman */}
       <div className="absolute inset-0 bg-black/50 z-10" />
 
+      {/* İçerik */}
       <div className="relative z-20 h-full flex items-center justify-center text-center">
         <div className="container mx-auto px-4">
           <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white drop-shadow-lg">
             Çırağan Elite Perde
           </h1>
           <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow-md">
-            Evinize zarafet katan, kişiye özel ölçü perdeler ve modern tasarımlar.
+            Evinize zarafet katan, kişiye özel ölçü perdeler ve modern
+            tasarımlar.
           </p>
           <Link
             href="/kategori/tum-urunler"
@@ -60,6 +77,51 @@ export default function HeroSection() {
         </div>
       </div>
 
+      {/* --- SOL OK BUTONU --- */}
+      <button
+        onClick={prevSlide}
+        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-black transition-all duration-300 border border-white/20 hidden group-hover:block md:block"
+        aria-label="Önceki Slayt"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15.75 19.5L8.25 12l7.5-7.5"
+          />
+        </svg>
+      </button>
+
+      {/* --- SAĞ OK BUTONU --- */}
+      <button
+        onClick={nextSlide}
+        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-black transition-all duration-300 border border-white/20 hidden group-hover:block md:block"
+        aria-label="Sonraki Slayt"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M8.25 4.5l7.5 7.5-7.5 7.5"
+          />
+        </svg>
+      </button>
+
+      {/* Alt Noktalar (Dots) */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-2">
         {heroImages.map((_, index) => (
           <button

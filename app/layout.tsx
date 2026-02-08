@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import CartDrawer from "@/components/cart/CartDrawer";
+
 
 export const metadata: Metadata = {
   title: "Çırağan Elite Perde | Premium Perde Koleksiyonu",
@@ -36,9 +39,12 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body className="min-h-screen flex flex-col bg-elite-bone text-elite-black antialiased">
+        <AuthProvider>
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
+        <CartDrawer />
+        </AuthProvider>
       </body>
     </html>
   );

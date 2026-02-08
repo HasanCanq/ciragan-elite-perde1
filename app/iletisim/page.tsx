@@ -51,15 +51,15 @@ export default function ContactPage() {
       <section className="bg-elite-black py-16 lg:py-24">
         <div className="elite-container">
           <nav className="flex items-center gap-2 text-sm mb-6">
-            <Link href="/" className="text-elite-bone/70 hover:text-elite-gold transition-colors">
+            <Link href="/iletisim" className="text-elite-bone/70 hover:text-elite-gold transition-colors">
               Ana Sayfa
             </Link>
             <ChevronRight className="w-4 h-4 text-elite-bone/50" />
-            <span className="text-elite-gold">İletişim</span>
+            <span className="text-elite-gold">İletisim</span>
           </nav>
 
           <h1 className="font-serif text-4xl lg:text-5xl font-semibold text-elite-bone">
-            İletişim
+            İletisim
           </h1>
           <p className="mt-4 text-elite-bone/80 text-lg max-w-2xl">
             Sorularınız için bize ulaşın. Uzman ekibimiz size yardımcı olmaktan mutluluk duyacaktır.
@@ -75,7 +75,7 @@ export default function ContactPage() {
             {/* Sol Kolon - Bilgiler */}
             <div className="space-y-6">
               <span className="text-elite-gold font-medium tracking-wider uppercase text-sm">Bize Ulaşın</span>
-              <h2 className="font-serif text-3xl font-semibold text-elite-black mt-3 mb-8">İletişim Bilgileri</h2>
+              <h2 className="font-serif text-3xl font-semibold text-elite-black mt-3 mb-8">İletisim Bilgileri</h2>
 
               <div className="space-y-6">
                 <div className="flex items-start gap-4 p-5 bg-white rounded-xl shadow-elite">
@@ -116,7 +116,7 @@ export default function ContactPage() {
 
             {/* Sağ Kolon - Harita ve Form */}
             <div className="space-y-8">
-              <div>
+              {/* <div>
                 <h3 className="font-serif text-xl font-semibold text-elite-black mb-4">Konumumuz</h3>
                 <div className="relative aspect-video rounded-2xl overflow-hidden shadow-elite bg-gray-100 border border-gray-200">
                   {showMap ? (
@@ -137,7 +137,7 @@ export default function ContactPage() {
                     </div>
                   )}
                 </div>
-              </div>
+              </div> */}
 
               {/* Form Alanı */}
               <div className="bg-white rounded-2xl shadow-elite p-8">
