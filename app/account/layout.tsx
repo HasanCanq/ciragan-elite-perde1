@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { User, MapPin, Package, Settings, LogOut, ChevronRight } from 'lucide-react';
+import { User, MapPin, Package, LogOut, ChevronRight } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 const navItems = [
-  { href: '/account', label: 'Profilim', icon: User },
+  { href: '/account', label: 'Kişisel Bilgilerim', icon: User },
   { href: '/account/addresses', label: 'Adreslerim', icon: MapPin },
   { href: '/account/orders', label: 'Siparişlerim', icon: Package },
 ];

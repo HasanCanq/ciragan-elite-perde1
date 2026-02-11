@@ -59,6 +59,13 @@ async function checkRateLimit(request: NextRequest): Promise<NextResponse | null
 }
 
 export async function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // Ödeme callback'i middleware'den muaf (banka POST redirect'i)
+  if (path === '/api/payment/callback') {
+    return NextResponse.next();
+  }
+
   // 1. Rate Limit kontrolü
   const rateLimitResponse = await checkRateLimit(request);
   if (rateLimitResponse) return rateLimitResponse;
@@ -71,7 +78,7 @@ export const config = {
   matcher: [
     // Admin ve hesap rotalarını koru
     '/admin/:path*',
-    '/hesabim/:path*',
+    '/account/:path*',
     // Auth callback'i hariç tut
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

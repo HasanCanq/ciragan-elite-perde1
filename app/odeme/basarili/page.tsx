@@ -4,12 +4,13 @@ import { CheckCircle, Package, ArrowRight, Home, Phone } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 
 interface PageProps {
-  searchParams: Promise<{ order?: string }>;
+  searchParams: Promise<{ order?: string; method?: string }>;
 }
 
 export default async function OrderSuccessPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const orderNumber = params.order;
+  const isCreditCard = params.method === 'credit_card';
 
   return (
     <div className="bg-elite-bone min-h-screen">
@@ -70,8 +71,9 @@ export default async function OrderSuccessPage({ searchParams }: PageProps) {
                 <div>
                   <p className="font-medium text-elite-black">Ödeme</p>
                   <p className="text-sm text-elite-gray">
-                    Havale/EFT ile ödeme yapacaksanız, banka bilgilerimiz e-posta ile
-                    iletilecektir.
+                    {isCreditCard
+                      ? 'Kredi kartı ödemeniz başarıyla alınmıştır. Siparişiniz doğrudan üretime alınacaktır.'
+                      : 'Havale/EFT ile ödeme yapacaksanız, banka bilgilerimiz e-posta ile iletilecektir.'}
                   </p>
                 </div>
               </li>
@@ -117,7 +119,7 @@ export default async function OrderSuccessPage({ searchParams }: PageProps) {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/hesabim/siparisler"
+              href="/account/orders"
               className="elite-button inline-flex items-center justify-center gap-2"
             >
               Siparişlerimi Görüntüle

@@ -23,13 +23,13 @@ import {
 // TİPLER
 // =====================================================
 
-interface StockValidationResult {
+export interface StockValidationResult {
   valid: boolean;
   errors: string[];
   productStocks: Map<string, number>;
 }
 
-interface PriceValidationResult {
+export interface PriceValidationResult {
   valid: boolean;
   errors: string[];
   serverCalculatedItems: OrderItemInsert[];
@@ -65,7 +65,7 @@ function calculateServerPrice(
 /**
  * Stok kontrolü yap
  */
-async function validateStock(
+export async function validateStock(
   cartItems: CartItem[],
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<StockValidationResult> {
@@ -73,7 +73,7 @@ async function validateStock(
   const productStocks = new Map<string, number>();
 
   // Tüm ürün ID'lerini topla
-  const productIds = [...new Set(cartItems.map((item) => item.productId))];
+  const productIds = Array.from(new Set(cartItems.map((item) => item.productId)));
 
   // Stok bilgilerini getir
   const { data: products, error } = await supabase
@@ -99,7 +99,7 @@ async function validateStock(
   }
 
   // Stok kontrolü
-  for (const [productId, demand] of demandMap) {
+  for (const [productId, demand] of Array.from(demandMap)) {
     const product = productMap.get(productId);
 
     if (!product) {
@@ -138,7 +138,7 @@ async function validateStock(
  * Fiyat doğrulama - Server-side fiyat hesaplama
  * Client'tan gelen fiyatlara GÜVENMİYORUZ
  */
-async function validateAndCalculatePrices(
+export async function validateAndCalculatePrices(
   cartItems: CartItem[],
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<PriceValidationResult> {
@@ -147,7 +147,7 @@ async function validateAndCalculatePrices(
   let serverSubtotal = 0;
 
   // Ürün bilgilerini getir
-  const productIds = [...new Set(cartItems.map((item) => item.productId))];
+  const productIds = Array.from(new Set(cartItems.map((item) => item.productId)));
   const { data: products, error } = await supabase
     .from('products')
     .select('id, name, slug, images, base_price')
@@ -396,7 +396,7 @@ export async function placeOrder(
     // ==========================================
     revalidatePath('/admin/dashboard');
     revalidatePath('/admin/orders');
-    revalidatePath('/hesabim/siparisler');
+    revalidatePath('/account/orders');
 
     return {
       data: {
@@ -519,7 +519,7 @@ export async function getServerCalculatedPrices(
     }
 
     // Ürün fiyatlarını getir
-    const productIds = [...new Set(cartItems.map((item) => item.productId))];
+    const productIds = Array.from(new Set(cartItems.map((item) => item.productId)));
     const { data: products } = await supabase
       .from('products')
       .select('id, base_price')

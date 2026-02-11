@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image"; 
 import { ChevronRight, Check, Truck, Shield, RotateCcw } from "lucide-react";
 import { getProduct } from "@/lib/actions";
 import { formatPrice } from "@/lib/utils";
 import PriceCalculator from "@/components/PriceCalculator";
+import ProductImageGallery from "@/components/ProductImageGallery";
+import ProductReviews from "@/components/ProductReviews";
 import type { Metadata } from "next";
 
 
@@ -106,48 +107,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           
           {/* SOL TARAF - RESİMLER */}
-          <div>
-            <div className="aspect-[4/5] bg-white rounded-lg shadow-elite overflow-hidden relative group">
-              {mainImage ? (
-                <Image 
-                  src={mainImage} 
-                  alt={product.name}
-                  fill
-                  className="object-cover transition-transform duration-700 group-hover:scale-105"
-                  priority // LCP için önemli
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-elite-bone to-gray-100">
-                  <span className="font-serif text-elite-gray/40 text-2xl">
-                    Resim Yok
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Küçük Resimler (Thumbnail) */}
-            {product.images && product.images.length > 1 && (
-              <div className="grid grid-cols-4 gap-3 mt-4">
-                {product.images.map((img, index) => (
-                  <div
-                    key={index}
-                    className={`aspect-square rounded-lg bg-white shadow-sm cursor-pointer overflow-hidden relative ${
-                      index === 0 ? "ring-2 ring-elite-gold" : "hover:ring-2 hover:ring-elite-gold/50"
-                    }`}
-                  >
-                    <Image 
-                      src={img} 
-                      alt={`${product.name} - ${index + 1}`}
-                      fill
-                      className="object-cover"
-                      sizes="100px"
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ProductImageGallery
+            images={product.images || []}
+            productName={product.name}
+          />
 
           {/* SAĞ TARAF - DETAYLAR VE HESAPLAMA */}
           <div>
@@ -226,6 +189,11 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
 
           </div>
+        </div>
+
+        {/* YORUMLAR */}
+        <div className="mt-12">
+          <ProductReviews productId={product.id} />
         </div>
       </div>
     </div>

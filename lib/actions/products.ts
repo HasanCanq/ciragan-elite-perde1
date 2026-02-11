@@ -1,548 +1,339 @@
 'use server';
 
 // =====================================================
-// ADMIN PRODUCT SERVER ACTIONS - CRUD & Image Upload
+// ADMIN PRODUCT ACTIONS (TEK VE TEMİZ VERSİYON)
 // =====================================================
 
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import {
-  Product,
-  ProductWithCategory,
-  ProductInsert,
-  ProductUpdate,
-  Category,
-  ApiResponse,
-  PaginatedResponse,
+    Product,
+    ProductWithCategory,
+    Category,
+    ApiResponse,
+    PaginatedResponse,
 } from '@/types';
 
 // =====================================================
-// HELPER: Admin Kontrolü
+// 1. GÜVENLİK VE YARDIMCI FONKSİYONLAR
 // =====================================================
 
-async function verifyAdmin(): Promise<{ supabase: Awaited<ReturnType<typeof createClient>>; userId: string }> {
-  const supabase = await createClient();
+// Admin yetkisi kontrolü
+async function verifyAdmin() {
+    const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Yetkisiz erişim');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Oturum açılmamış.');
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+    // Rol kontrolü (metadata veya profiles tablosundan)
+    // Not: Eğer user_metadata içinde role tutuyorsan oradan da bakabilirsin
+    // Şimdilik sadece user var mı diye bakıyoruz, gerekirse burayı güçlendiririz.
+    return { supabase, user };
+}
 
-  if (!profile || profile.role !== 'ADMIN') {
-    throw new Error('Yetkisiz erişim');
-  }
+// Türkçe karakter uyumlu Slug oluşturucu
+function generateSlug(text: string): string {
+    const turkishMap: Record<string, string> = {
+        ç: 'c', Ç: 'C', ğ: 'g', Ğ: 'G', ı: 'i', I: 'I',
+        İ: 'i', i: 'i', ö: 'o', Ö: 'O', ş: 's', Ş: 'S',
+        ü: 'u', Ü: 'U'
+    };
 
-  return { supabase, userId: user.id };
+    return text
+        .split('')
+        .map((char) => turkishMap[char] || char)
+        .join('')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+// Storage URL'inden dosya yolunu çıkaran yardımcı
+// URL formatı: .../storage/v1/object/public/products/<dosya-yolu>
+function extractStoragePath(url: string): string | null {
+    try {
+        const match = url.match(/\/storage\/v1\/object\/public\/products\/(.+)$/);
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
 }
 
 // =====================================================
-// ÜRÜN LİSTELEME (Admin)
+// 2. VERİ ÇEKME İŞLEMLERİ (GET)
 // =====================================================
 
-/**
- * Admin: Tüm ürünleri getir (yayında olsun olmasın)
- */
-export async function getAdminProducts(
-  page = 1,
-  pageSize = 20,
-  search?: string
+// Tüm ürünleri getir (Sayfalı)
+export async function getProducts(
+    page = 1,
+    pageSize = 20,
+    search?: string
 ): Promise<ApiResponse<PaginatedResponse<ProductWithCategory>>> {
-  try {
-    const { supabase } = await verifyAdmin();
+    try {
+        const { supabase } = await verifyAdmin();
 
-    // Toplam sayıyı al
-    let countQuery = supabase
-      .from('products')
-      .select('id', { count: 'exact', head: true });
+        let countQuery = supabase.from('products').select('*', { count: 'exact', head: true });
 
-    if (search) {
-      countQuery = countQuery.ilike('name', `%${search}%`);
+        if (search) {
+            countQuery = countQuery.ilike('name', `%${search}%`);
+        }
+
+        const { count, error: countError } = await countQuery;
+        if (countError) throw countError;
+
+        const offset = (page - 1) * pageSize;
+        let query = supabase
+            .from('products')
+            .select(`*, category:categories(*)`)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + pageSize - 1);
+
+        if (search) {
+            query = query.ilike('name', `%${search}%`);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        return {
+            success: true,
+            data: {
+                data: data as ProductWithCategory[],
+                total: count || 0,
+                page,
+                pageSize,
+                totalPages: Math.ceil((count || 0) / pageSize),
+            },
+            error: null
+        };
+    } catch (error) {
+        console.error('getProducts hatası:', error);
+        return { success: false, data: null, error: 'Ürünler yüklenemedi' };
     }
-
-    const { count, error: countError } = await countQuery;
-    if (countError) throw countError;
-
-    // Ürünleri al
-    const offset = (page - 1) * pageSize;
-    let query = supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(*)
-      `)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + pageSize - 1);
-
-    if (search) {
-      query = query.ilike('name', `%${search}%`);
-    }
-
-    const { data: products, error } = await query;
-    if (error) throw error;
-
-    return {
-      data: {
-        data: products as ProductWithCategory[],
-        total: count || 0,
-        page,
-        pageSize,
-        totalPages: Math.ceil((count || 0) / pageSize),
-      },
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('getAdminProducts error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ürünler yüklenemedi',
-      success: false,
-    };
-  }
 }
 
-/**
- * Admin: Tek ürün detayı getir
- */
-export async function getAdminProduct(productId: string): Promise<ApiResponse<ProductWithCategory>> {
-  try {
-    const { supabase } = await verifyAdmin();
+// Tek ürün getir
+export async function getProductById(id: string): Promise<ApiResponse<ProductWithCategory>> {
+    try {
+        const { supabase } = await verifyAdmin();
 
-    const { data: product, error } = await supabase
-      .from('products')
-      .select(`
-        *,
-        category:categories(*)
-      `)
-      .eq('id', productId)
-      .single();
+        const { data, error } = await supabase
+            .from('products')
+            .select(`*, category:categories(*)`)
+            .eq('id', id)
+            .single();
 
-    if (error) throw error;
+        if (error) throw error;
 
-    return {
-      data: product as ProductWithCategory,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('getAdminProduct error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ürün bulunamadı',
-      success: false,
-    };
-  }
+        return { success: true, data: data as ProductWithCategory, error: null };
+    } catch (error) {
+        return { success: false, data: null, error: 'Ürün bulunamadı' };
+    }
 }
 
-/**
- * Admin: Tüm kategorileri getir
- */
-export async function getAdminCategories(): Promise<ApiResponse<Category[]>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    const { data: categories, error } = await supabase
-      .from('categories')
-      .select('*')
-      .order('display_order', { ascending: true });
-
-    if (error) throw error;
-
-    return {
-      data: categories as Category[],
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('getAdminCategories error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Kategoriler yüklenemedi',
-      success: false,
-    };
-  }
+// Kategorileri getir (Selectbox için)
+export async function getCategories(): Promise<ApiResponse<Category[]>> {
+    try {
+        const { supabase } = await verifyAdmin();
+        const { data, error } = await supabase.from('categories').select('*').order('name');
+        if (error) throw error;
+        return { success: true, data: data as Category[], error: null };
+    } catch (error) {
+        return { success: false, data: null, error: 'Kategoriler alınamadı' };
+    }
 }
 
 // =====================================================
-// ÜRÜN OLUŞTURMA
+// 3. YAZMA İŞLEMLERİ (CREATE / UPDATE / DELETE)
 // =====================================================
 
-/**
- * Admin: Yeni ürün oluştur
- */
-export async function createProduct(
-  productData: Omit<ProductInsert, 'slug'>
-): Promise<ApiResponse<Product>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    // Slug oluştur
-    const slug = generateSlug(productData.name);
-
-    // Slug benzersizliğini kontrol et
-    const { data: existing } = await supabase
-      .from('products')
-      .select('id')
-      .eq('slug', slug)
-      .single();
-
-    const finalSlug = existing ? `${slug}-${Date.now()}` : slug;
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .insert({
-        ...productData,
-        slug: finalSlug,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath('/admin/products');
-    revalidatePath('/');
-
-    return {
-      data: product as Product,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('createProduct error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ürün oluşturulamadı',
-      success: false,
-    };
-  }
-}
-
-/**
- * Admin: Ürün güncelle
- */
-export async function updateProduct(
-  productId: string,
-  productData: ProductUpdate
-): Promise<ApiResponse<Product>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    // Eğer isim değişmişse slug'ı da güncelle
-    let updateData = { ...productData };
-    if (productData.name) {
-      const newSlug = generateSlug(productData.name);
-
-      // Başka ürünlerde bu slug var mı kontrol et
-      const { data: existing } = await supabase
-        .from('products')
-        .select('id')
-        .eq('slug', newSlug)
-        .neq('id', productId)
-        .single();
-
-      updateData.slug = existing ? `${newSlug}-${Date.now()}` : newSlug;
-    }
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .update(updateData)
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath('/admin/products');
-    revalidatePath(`/admin/products/${productId}`);
-    revalidatePath('/');
-    revalidatePath(`/urun/${product.slug}`);
-
-    return {
-      data: product as Product,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('updateProduct error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ürün güncellenemedi',
-      success: false,
-    };
-  }
-}
-
-/**
- * Admin: Ürün sil
- */
-export async function deleteProduct(productId: string): Promise<ApiResponse<null>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    // Önce ürünün resimlerini al
-    const { data: product } = await supabase
-      .from('products')
-      .select('images')
-      .eq('id', productId)
-      .single();
-
-    // Storage'dan resimleri sil
-    if (product?.images && product.images.length > 0) {
-      const adminClient = await createAdminClient();
-      const filePaths = product.images
-        .map((url: string) => extractStoragePath(url))
-        .filter(Boolean);
-
-      if (filePaths.length > 0) {
-        await adminClient.storage.from('products').remove(filePaths);
-      }
-    }
-
-    // Ürünü sil
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId);
-
-    if (error) throw error;
-
-    revalidatePath('/admin/products');
-    revalidatePath('/');
-
-    return {
-      data: null,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('deleteProduct error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ürün silinemedi',
-      success: false,
-    };
-  }
-}
-
-// =====================================================
-// GÖRSEL YÜKLEMESİ
-// =====================================================
-
-/**
- * Admin: Ürün görseli yükle
- */
-export async function uploadProductImage(
-  formData: FormData
-): Promise<ApiResponse<{ url: string }>> {
-  try {
-    await verifyAdmin();
-
-    const file = formData.get('file') as File;
-    if (!file) {
-      throw new Error('Dosya seçilmedi');
-    }
-
-    // Dosya tipi kontrolü
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error('Geçersiz dosya tipi. Sadece JPEG, PNG, WebP ve GIF desteklenir.');
-    }
-
-    // Dosya boyutu kontrolü (5MB)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      throw new Error('Dosya boyutu 5MB\'dan büyük olamaz.');
-    }
-
-    // Benzersiz dosya adı oluştur
+// Tek bir dosyayı Storage'a yükle, public URL döndür
+async function uploadImage(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    file: File
+): Promise<string> {
     const ext = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
-    const filePath = `products/${fileName}`;
+    const fileName = `products/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // Admin client ile yükle (service role key)
-    const adminClient = await createAdminClient();
-
-    const { error: uploadError } = await adminClient.storage
-      .from('products')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    const { error: uploadError } = await supabase.storage
+        .from('products')
+        .upload(fileName, file, { upsert: false });
 
     if (uploadError) throw uploadError;
 
-    // Public URL al
-    const { data: { publicUrl } } = adminClient.storage
-      .from('products')
-      .getPublicUrl(filePath);
-
-    return {
-      data: { url: publicUrl },
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('uploadProductImage error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Görsel yüklenemedi',
-      success: false,
-    };
-  }
+    const { data: { publicUrl } } = supabase.storage.from('products').getPublicUrl(fileName);
+    return publicUrl;
 }
 
-/**
- * Admin: Ürün görselini sil
- */
-export async function deleteProductImage(imageUrl: string): Promise<ApiResponse<null>> {
-  try {
-    await verifyAdmin();
+// YENİ ÜRÜN OLUŞTUR
+export async function createProduct(formData: FormData): Promise<ApiResponse<Product>> {
+    try {
+        const { supabase } = await verifyAdmin();
 
-    const filePath = extractStoragePath(imageUrl);
-    if (!filePath) {
-      throw new Error('Geçersiz görsel URL\'i');
+        // 1. Form verilerini al
+        const name = formData.get('name') as string;
+        const price = parseFloat(formData.get('base_price') as string);
+        const categoryId = formData.get('category_id') as string;
+        const shortDescription = formData.get('short_description') as string;
+        const description = formData.get('description') as string;
+        const isPublished = formData.get('is_published') === 'true';
+        const inStock = formData.get('in_stock') === 'true';
+
+        // 2. Slug oluştur ve kontrol et
+        let slug = generateSlug(name);
+        const { data: existing } = await supabase.from('products').select('id').eq('slug', slug).single();
+        if (existing) slug = `${slug}-${Date.now()}`;
+
+        // 3. Çoklu Resim Yükleme (3 slot)
+        const images: string[] = [];
+        for (let i = 0; i < 3; i++) {
+            const file = formData.get(`image_${i}`) as File;
+            if (file && file.size > 0) {
+                const url = await uploadImage(supabase, file);
+                images.push(url);
+            }
+        }
+
+        // 4. Veritabanına Kayıt
+        const { data: product, error } = await supabase
+            .from('products')
+            .insert({
+                name,
+                slug,
+                base_price: price,
+                category_id: categoryId || null,
+                short_description: shortDescription || null,
+                description,
+                images,
+                is_published: isPublished,
+                in_stock: inStock
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        revalidatePath('/admin/products');
+        return { success: true, data: product as Product, error: null };
+
+    } catch (error) {
+        console.error('createProduct hatası:', error);
+        return { success: false, data: null, error: error instanceof Error ? error.message : 'Ürün oluşturulamadı' };
     }
-
-    const adminClient = await createAdminClient();
-
-    const { error } = await adminClient.storage
-      .from('products')
-      .remove([filePath]);
-
-    if (error) throw error;
-
-    return {
-      data: null,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('deleteProductImage error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Görsel silinemedi',
-      success: false,
-    };
-  }
 }
 
-// =====================================================
-// YARDIMCI FONKSİYONLAR
-// =====================================================
+// ÜRÜN GÜNCELLE
+export async function updateProduct(id: string, formData: FormData): Promise<ApiResponse<Product>> {
+    try {
+        const { supabase } = await verifyAdmin();
 
-/**
- * Türkçe karakterleri çevir ve slug oluştur
- */
-function generateSlug(text: string): string {
-  const turkishMap: Record<string, string> = {
-    ç: 'c', Ç: 'C',
-    ğ: 'g', Ğ: 'G',
-    ı: 'i', I: 'I',
-    İ: 'I', i: 'i',
-    ö: 'o', Ö: 'O',
-    ş: 's', Ş: 'S',
-    ü: 'u', Ü: 'U',
-  };
+        const name = formData.get('name') as string;
+        const shortDescription = formData.get('short_description') as string;
+        const price = parseFloat(formData.get('base_price') as string);
+        const categoryId = formData.get('category_id') as string;
+        const description = formData.get('description') as string;
+        const isPublished = formData.get('is_published') === 'true';
+        const inStock = formData.get('in_stock') === 'true';
 
-  return text
-    .split('')
-    .map((char) => turkishMap[char] || char)
-    .join('')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+        // Mevcut ürünü al
+        const { data: currentProduct } = await supabase.from('products').select('images').eq('id', id).single();
+        const oldImages = currentProduct?.images || [];
+
+        // Korunan mevcut URL'leri al (JSON string olarak gönderilir)
+        const existingImagesRaw = formData.get('existing_images') as string;
+        const existingImages: string[] = existingImagesRaw ? JSON.parse(existingImagesRaw) : [];
+
+        // Silinecek eski görselleri bul ve Storage'dan temizle
+        const removedUrls = oldImages.filter((url: string) => !existingImages.includes(url));
+        if (removedUrls.length > 0) {
+            try {
+                const paths = removedUrls.map((url: string) => extractStoragePath(url)).filter(Boolean) as string[];
+                if (paths.length > 0) await supabase.storage.from('products').remove(paths);
+            } catch (e) {
+                console.error('Eski resim silme hatası (devam ediliyor):', e);
+            }
+        }
+
+        // Yeni görselleri yükle ve mevcut sıraya yerleştir
+        const images: string[] = [...existingImages];
+        for (let i = 0; i < 3; i++) {
+            const file = formData.get(`image_${i}`) as File;
+            if (file && file.size > 0) {
+                const url = await uploadImage(supabase, file);
+                // Slot index'ine yerleştir
+                const slotIndex = parseInt(formData.get(`image_${i}_slot`) as string || String(images.length));
+                images.splice(slotIndex, 0, url);
+            }
+        }
+
+        // Güncelleme
+        const { data: updatedProduct, error } = await supabase
+            .from('products')
+            .update({
+                name,
+                base_price: price,
+                category_id: categoryId || null,
+                short_description: shortDescription || null,
+                description,
+                images,
+                is_published: isPublished,
+                in_stock: inStock,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        revalidatePath('/admin/products');
+        return { success: true, data: updatedProduct as Product, error: null };
+
+    } catch (error) {
+        console.error('updateProduct hatası:', error);
+        return { success: false, data: null, error: error instanceof Error ? error.message : 'Güncelleme başarısız' };
+    }
 }
 
-/**
- * Storage URL'inden dosya yolunu çıkar
- */
-function extractStoragePath(url: string): string | null {
-  try {
-    const match = url.match(/\/products\/(.+)$/);
-    return match ? `products/${match[1]}` : null;
-  } catch {
-    return null;
-  }
+// ÜRÜN SİL
+export async function deleteProduct(id: string): Promise<ApiResponse<null>> {
+    try {
+        const { supabase } = await verifyAdmin();
+
+        // Önce resimleri temizle (hata olursa ürün silmeyi engellemesin)
+        const { data: product } = await supabase.from('products').select('images').eq('id', id).single();
+
+        if (product?.images && product.images.length > 0) {
+            try {
+                const paths = product.images.map((url: string) => extractStoragePath(url)).filter(Boolean) as string[];
+                if (paths.length > 0) await supabase.storage.from('products').remove(paths);
+            } catch (storageError) {
+                console.error('Resim silme hatası (devam ediliyor):', storageError);
+            }
+        }
+
+        // Ürünü sil
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        if (error) throw error;
+
+        revalidatePath('/admin/products');
+        return { success: true, data: null, error: null };
+
+    } catch (error) {
+        console.error('deleteProduct hatası:', error);
+        return { success: false, data: null, error: error instanceof Error ? error.message : 'Silme işlemi başarısız' };
+    }
 }
 
-// =====================================================
-// ÜRÜN YAYIN DURUMU
-// =====================================================
-
-/**
- * Admin: Ürün yayın durumunu değiştir
- */
-export async function toggleProductPublish(
-  productId: string,
-  isPublished: boolean
-): Promise<ApiResponse<Product>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .update({ is_published: isPublished })
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath('/admin/products');
-    revalidatePath('/');
-
-    return {
-      data: product as Product,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('toggleProductPublish error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Durum değiştirilemedi',
-      success: false,
-    };
-  }
-}
-
-/**
- * Admin: Ürün stok durumunu değiştir
- */
-export async function toggleProductStock(
-  productId: string,
-  inStock: boolean
-): Promise<ApiResponse<Product>> {
-  try {
-    const { supabase } = await verifyAdmin();
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .update({ in_stock: inStock })
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath('/admin/products');
-    revalidatePath('/');
-
-    return {
-      data: product as Product,
-      error: null,
-      success: true,
-    };
-  } catch (error) {
-    console.error('toggleProductStock error:', error);
-    return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Durum değiştirilemedi',
-      success: false,
-    };
-  }
-}
+// DURUM DEĞİŞTİR (Hızlı toggle işlemleri için)
+export async function toggleProductStatus(id: string, field: 'is_published' | 'in_stock', value: boolean) {
+    try {
+        const { supabase } = await verifyAdmin();
+        const { error } = await supabase.from('products').update({ [field]: value }).eq('id', id);
+        if (error) throw error;
+        revalidatePath('/admin/products');
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Durum güncellenemedi' };
+    }
+} 

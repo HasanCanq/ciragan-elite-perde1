@@ -255,6 +255,26 @@ export interface OrderItemInsert {
   total_price: number;
 }
 
+// -----------------------------------------------------
+// REVIEWS
+// -----------------------------------------------------
+export interface Review {
+  id: string;
+  product_id: string;
+  user_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewWithUser extends Review {
+  profile: {
+    full_name: string | null;
+    email: string;
+  } | null;
+}
+
 // =====================================================
 // SEPET TİPLERİ (Frontend - Zustand Store)
 // =====================================================
@@ -322,6 +342,22 @@ export interface CheckoutFormData {
   sameAsBilling: boolean;
   customerNote?: string;
   paymentMethod: 'credit_card' | 'bank_transfer' | 'cash_on_delivery';
+}
+
+// Kredi kartı verileri (ASLA DB'ye yazılmaz - sadece bellek içi transit)
+export interface CreditCardData {
+  cardHolderName: string;
+  cardNumber: string;
+  expireMonth: string;
+  expireYear: string;
+  cvc: string;
+}
+
+// 3D Secure başlatma sonucu
+export interface ThreedsInitResult {
+  orderId: string;
+  orderNumber: string;
+  threeDSHtmlContent: string;
 }
 
 export interface ContactFormData {

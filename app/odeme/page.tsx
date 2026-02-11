@@ -21,9 +21,10 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { placeOrder, validateOrder, getServerCalculatedPrices } from '@/lib/actions/checkout';
+import { initiateCreditCardPayment } from '@/lib/actions/payment';
 import { syncCart } from '@/lib/actions/cart';
 import { formatPrice } from '@/lib/utils';
-import { PILE_LABELS_UPPER, SHIPPING, CheckoutFormData } from '@/types';
+import { PILE_LABELS_UPPER, SHIPPING, CheckoutFormData, CreditCardData } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 
 export default function CheckoutPage() {
@@ -56,6 +57,15 @@ export default function CheckoutPage() {
     sameAsBilling: true,
     customerNote: '',
     paymentMethod: 'bank_transfer',
+  });
+
+  // Kredi kartı state
+  const [cardData, setCardData] = useState<CreditCardData>({
+    cardHolderName: '',
+    cardNumber: '',
+    expireMonth: '',
+    expireYear: '',
+    cvc: '',
   });
 
   const supabase = createClient();
@@ -210,6 +220,21 @@ export default function CheckoutPage() {
     }));
   };
 
+  // Kart numarası formatlama (4'lü gruplar)
+  const formatCardNumber = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+  };
+
+  const handleCardChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === 'cardNumber') {
+      setCardData(prev => ({ ...prev, cardNumber: formatCardNumber(value) }));
+    } else {
+      setCardData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -223,16 +248,39 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Güvenli sipariş oluştur
-      const result = await placeOrder(items, formData);
+      if (formData.paymentMethod === 'credit_card') {
+        // Kart bilgisi kontrol
+        const cleanCardNumber = cardData.cardNumber.replace(/\s/g, '');
+        if (!cardData.cardHolderName || cleanCardNumber.length < 15 || !cardData.expireMonth || !cardData.expireYear || cardData.cvc.length < 3) {
+          setError('Lütfen kart bilgilerini eksiksiz doldurun');
+          setIsLoading(false);
+          return;
+        }
 
-      if (!result.success || !result.data) {
-        throw new Error(result.error || 'Sipariş oluşturulamadı');
+        // 3D Secure ödeme başlat
+        const result = await initiateCreditCardPayment(items, formData, cardData);
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || 'Ödeme başlatılamadı');
+        }
+
+        // 3DS HTML'i render et - banka sayfası gösterilir
+        clearCart();
+        document.open();
+        document.write(result.data.threeDSHtmlContent);
+        document.close();
+        return;
+      } else {
+        // Havale/EFT veya Kapıda Ödeme
+        const result = await placeOrder(items, formData);
+
+        if (!result.success || !result.data) {
+          throw new Error(result.error || 'Sipariş oluşturulamadı');
+        }
+
+        clearCart();
+        router.push(`/odeme/basarili?order=${result.data.orderNumber}`);
       }
-
-      // Clear cart and redirect to success page
-      clearCart();
-      router.push(`/odeme/basarili?order=${result.data.orderNumber}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Bir hata oluştu. Lütfen tekrar deneyin.'
@@ -494,26 +542,143 @@ export default function CheckoutPage() {
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-elite-gold transition-colors opacity-50">
+                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-elite-gold transition-colors">
                     <input
                       type="radio"
                       name="paymentMethod"
                       value="credit_card"
-                      disabled
+                      checked={formData.paymentMethod === 'credit_card'}
+                      onChange={handleInputChange}
                       className="w-4 h-4 text-elite-gold border-gray-300 focus:ring-elite-gold"
                     />
-                    <div>
-                      <p className="font-medium text-elite-black">
-                        Kredi Kartı
-                        <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
-                          Yakında
-                        </span>
-                      </p>
-                      <p className="text-sm text-elite-gray">
-                        Online kredi kartı ile ödeme
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <p className="font-medium text-elite-black">Kredi Kartı</p>
+                        <p className="text-sm text-elite-gray">
+                          3D Secure ile güvenli ödeme
+                        </p>
+                      </div>
+                      <ShieldCheck className="w-5 h-5 text-green-500 ml-auto" />
                     </div>
                   </label>
+
+                  {/* Kredi Kartı Formu */}
+                  {formData.paymentMethod === 'credit_card' && (
+                    <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-elite-gray mb-1.5">
+                          Kart Üzerindeki İsim
+                        </label>
+                        <input
+                          type="text"
+                          name="cardHolderName"
+                          value={cardData.cardHolderName}
+                          onChange={handleCardChange}
+                          required
+                          placeholder="AD SOYAD"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg
+                                   focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                                   transition-colors outline-none uppercase"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-elite-gray mb-1.5">
+                          Kart Numarası
+                        </label>
+                        <input
+                          type="text"
+                          name="cardNumber"
+                          value={cardData.cardNumber}
+                          onChange={handleCardChange}
+                          required
+                          maxLength={19}
+                          placeholder="0000 0000 0000 0000"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg
+                                   focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                                   transition-colors outline-none font-mono tracking-wider"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
+                            Ay
+                          </label>
+                          <select
+                            name="expireMonth"
+                            value={cardData.expireMonth}
+                            onChange={handleCardChange}
+                            required
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                                     transition-colors outline-none bg-white"
+                          >
+                            <option value="">Ay</option>
+                            {Array.from({ length: 12 }, (_, i) => {
+                              const month = String(i + 1).padStart(2, '0');
+                              return (
+                                <option key={month} value={month}>
+                                  {month}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
+                            Yıl
+                          </label>
+                          <select
+                            name="expireYear"
+                            value={cardData.expireYear}
+                            onChange={handleCardChange}
+                            required
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                                     transition-colors outline-none bg-white"
+                          >
+                            <option value="">Yıl</option>
+                            {Array.from({ length: 11 }, (_, i) => {
+                              const year = String(new Date().getFullYear() + i);
+                              return (
+                                <option key={year} value={year}>
+                                  {year}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
+                            CVC
+                          </label>
+                          <input
+                            type="password"
+                            name="cvc"
+                            value={cardData.cvc}
+                            onChange={handleCardChange}
+                            required
+                            maxLength={4}
+                            placeholder="***"
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                                     transition-colors outline-none text-center font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 p-2 rounded">
+                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                        <span>
+                          Kart bilgileriniz 3D Secure ile güvenli şekilde işlenir.
+                          Bilgileriniz sunucularımızda saklanmaz.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

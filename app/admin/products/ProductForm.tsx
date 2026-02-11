@@ -1,472 +1,357 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import {
-  ArrowLeft,
-  Save,
-  Loader2,
-  Upload,
-  X,
-  Package,
-  ImageIcon,
-  GripVertical,
-} from 'lucide-react';
-import Link from 'next/link';
-import {
-  createProduct,
-  updateProduct,
-  uploadProductImage,
-  deleteProductImage,
-} from '@/lib/actions/products';
+import { Upload, X, Loader2, Save, ArrowLeft } from 'lucide-react';
+import { createProduct, updateProduct, getCategories } from '@/lib/actions/products';
 import { ProductWithCategory, Category } from '@/types';
 
+const MAX_IMAGES = 3;
+
 interface ProductFormProps {
-  product?: ProductWithCategory | null;
-  categories: Category[];
+  initialData?: ProductWithCategory | null;
 }
 
-export default function ProductForm({ product, categories }: ProductFormProps) {
+export default function ProductForm({ initialData }: ProductFormProps) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  // Form State
+  const [formData, setFormData] = useState({
+    name: initialData?.name || '',
+    short_description: initialData?.short_description || '',
+    description: initialData?.description || '',
+    base_price: initialData?.base_price || 0,
+    category_id: initialData?.category_id || '',
+    in_stock: initialData?.in_stock ?? true,
+    is_published: initialData?.is_published ?? false,
+  });
 
-  // Form state
-  const [name, setName] = useState(product?.name || '');
-  const [description, setDescription] = useState(product?.description || '');
-  const [shortDescription, setShortDescription] = useState(product?.short_description || '');
-  const [basePrice, setBasePrice] = useState(product?.base_price?.toString() || '');
-  const [categoryId, setCategoryId] = useState(product?.category_id || '');
-  const [images, setImages] = useState<string[]>(product?.images || []);
-  const [isPublished, setIsPublished] = useState(product?.is_published ?? true);
-  const [inStock, setInStock] = useState(product?.in_stock ?? true);
-  const [metaTitle, setMetaTitle] = useState(product?.meta_title || '');
-  const [metaDescription, setMetaDescription] = useState(product?.meta_description || '');
-  const [ozellikler, setOzellikler] = useState(product?.ozellikler || '');
+  // Çoklu Resim State'i (3 slot)
+  const existingUrls = initialData?.images || [];
+  const [slots, setSlots] = useState<Array<{ type: 'existing'; url: string } | { type: 'new'; file: File; preview: string } | null>>(() => {
+    const initial: Array<{ type: 'existing'; url: string } | { type: 'new'; file: File; preview: string } | null> = [];
+    for (let i = 0; i < MAX_IMAGES; i++) {
+      if (existingUrls[i]) {
+        initial.push({ type: 'existing', url: existingUrls[i] });
+      } else {
+        initial.push(null);
+      }
+    }
+    return initial;
+  });
 
-  const isEditMode = !!product;
+  useEffect(() => {
+    const loadCategories = async () => {
+      const res = await getCategories();
+      if (res.success && res.data) {
+        setCategories(res.data);
+      }
+    };
+    loadCategories();
+  }, []);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleToggle = (name: string, checked: boolean) => {
+    setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleImageSelect = (slotIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    setError(null);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const result = await uploadProductImage(formData);
-
-      if (result.success && result.data) {
-        setImages((prev) => [...prev, result.data!.url]);
-      } else {
-        setError(result.error || 'Görsel yüklenemedi');
-      }
-    } catch (err) {
-      setError('Görsel yüklenirken bir hata oluştu');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Dosya boyutu 5MB\'dan küçük olmalıdır.');
+      e.target.value = '';
+      return;
     }
+
+    const preview = URL.createObjectURL(file);
+    setSlots(prev => {
+      const next = [...prev];
+      next[slotIndex] = { type: 'new', file, preview };
+      return next;
+    });
   };
 
-  const handleRemoveImage = async (imageUrl: string) => {
-    // Önce UI'dan kaldır
-    setImages((prev) => prev.filter((img) => img !== imageUrl));
-
-    // Storage'dan sil (arka planda)
-    await deleteProductImage(imageUrl);
+  const handleRemoveImage = (slotIndex: number) => {
+    setSlots(prev => {
+      const next = [...prev];
+      const slot = next[slotIndex];
+      if (slot?.type === 'new') {
+        URL.revokeObjectURL(slot.preview);
+      }
+      next[slotIndex] = null;
+      return next;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
+    setLoading(true);
 
     try {
-      // Validasyon
-      if (!name.trim()) {
-        throw new Error('Ürün adı gereklidir');
-      }
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('short_description', formData.short_description);
+      data.append('description', formData.description);
+      data.append('base_price', formData.base_price.toString());
+      data.append('category_id', formData.category_id);
+      data.append('in_stock', String(formData.in_stock));
+      data.append('is_published', String(formData.is_published));
 
-      const price = parseFloat(basePrice);
-      if (isNaN(price) || price <= 0) {
-        throw new Error('Geçerli bir fiyat giriniz');
-      }
+      // Çoklu resim: her slot için yeni dosya veya mevcut URL gönder
+      const keptExistingUrls: string[] = [];
+      let newImageIndex = 0;
 
-      const productData = {
-        name: name.trim(),
-        description: description.trim() || null,
-        short_description: shortDescription.trim() || null,
-        base_price: price,
-        category_id: categoryId || null,
-        images,
-        is_published: isPublished,
-        in_stock: inStock,
-        meta_title: metaTitle.trim() || null,
-        meta_description: metaDescription.trim() || null,
-        ozellikler: ozellikler.trim() || null,
-      };
+      for (let i = 0; i < MAX_IMAGES; i++) {
+        const slot = slots[i];
+        if (!slot) continue;
 
-      if (isEditMode && product) {
-        const result = await updateProduct(product.id, productData);
-        if (!result.success) {
-          throw new Error(result.error || 'Ürün güncellenemedi');
+        if (slot.type === 'existing') {
+          keptExistingUrls.push(slot.url);
+        } else if (slot.type === 'new') {
+          data.append(`image_${newImageIndex}`, slot.file);
+          data.append(`image_${newImageIndex}_slot`, String(keptExistingUrls.length + newImageIndex));
+          newImageIndex++;
         }
-        setSuccess('Ürün başarıyla güncellendi!');
+      }
+
+      data.append('existing_images', JSON.stringify(keptExistingUrls));
+
+      let result;
+      if (initialData) {
+        result = await updateProduct(initialData.id, data);
       } else {
-        const result = await createProduct(productData);
-        if (!result.success) {
-          throw new Error(result.error || 'Ürün oluşturulamadı');
-        }
-        setSuccess('Ürün başarıyla oluşturuldu!');
-        setTimeout(() => {
-          router.push('/admin/products');
-        }, 1500);
+        result = await createProduct(data);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+
+      if (result.success) {
+        alert(initialData ? 'Ürün güncellendi!' : 'Ürün oluşturuldu!');
+        router.push('/admin/products');
+        router.refresh();
+      } else {
+        alert('Hata: ' + result.error);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Beklenmedik bir hata oluştu.');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/admin/products"
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
-              {isEditMode ? 'Ürün Düzenle' : 'Yeni Ürün Ekle'}
-            </h1>
-            <p className="text-gray-500 mt-1">
-              {isEditMode
-                ? 'Ürün bilgilerini güncelleyin'
-                : 'Yeni bir ürün oluşturun'}
-            </p>
-          </div>
-        </div>
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Başlık */}
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={() => router.back()}
+          className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {initialData ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle'}
+        </h1>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
-          {error}
-        </div>
-      )}
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-600">
-          {success}
-        </div>
-      )}
+          {/* SOL TARAF (Görseller ve Durum) */}
+          <div className="lg:col-span-1 space-y-6">
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Basic Info */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Temel Bilgiler</h2>
+            {/* Çoklu Görsel Yükleme (3 Slot) */}
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Ürün Görselleri ({slots.filter(Boolean).length}/{MAX_IMAGES})
+              </label>
 
-              <div className="space-y-4">
-                {/* Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ürün Adı *
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="Ürün adını girin"
-                  />
-                </div>
+              <div className="space-y-3">
+                {slots.map((slot, index) => (
+                  <div key={index} className="relative">
+                    {/* Slot numarası */}
+                    <span className="absolute -top-2 -left-2 z-10 w-6 h-6 bg-elite-brown text-white text-xs rounded-full flex items-center justify-center font-bold">
+                      {index + 1}
+                    </span>
 
-                {/* Short Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Kısa Açıklama
-                  </label>
-                  <input
-                    type="text"
-                    value={shortDescription}
-                    onChange={(e) => setShortDescription(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="Ürün kartlarında görünecek kısa açıklama"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Açıklama
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={5}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none resize-none"
-                    placeholder="Ürün açıklaması"
-                  />
-                </div>
-
-                {/* Ozellikler */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Özellikler (JSON formatında)
-                  </label>
-                  <textarea
-                    value={ozellikler}
-                    onChange={(e) => setOzellikler(e.target.value)}
-                    rows={4}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg font-mono text-sm
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none resize-none"
-                    placeholder='{"Kumaş": "Polyester", "Renk": "Beyaz"}'
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Images */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Görseller</h2>
-
-              {/* Image Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-                {images.map((image, idx) => (
-                  <div
-                    key={idx}
-                    className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
-                  >
-                    <Image
-                      src={image}
-                      alt={`Ürün görseli ${idx + 1}`}
-                      fill
-                      className="object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(image)}
-                        className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                    {idx === 0 && (
-                      <span className="absolute top-2 left-2 px-2 py-1 bg-elite-gold text-white text-xs rounded">
-                        Ana Görsel
-                      </span>
+                    {slot ? (
+                      <div className="relative aspect-[4/3] bg-gray-50 rounded-lg overflow-hidden group border border-gray-200">
+                        <Image
+                          src={slot.type === 'existing' ? slot.url : slot.preview}
+                          alt={`Görsel ${index + 1}`}
+                          fill
+                          className="object-cover"
+                        />
+                        {/* Overlay: Sil butonu */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(index)}
+                            className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                        {index === 0 && (
+                          <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-elite-brown text-white text-[10px] rounded font-medium">
+                            Ana Görsel
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center aspect-[4/3] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer hover:border-elite-brown hover:bg-gray-100 transition-colors">
+                        <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                        <span className="text-xs text-gray-500">
+                          {index === 0 ? 'Ana Görsel Yükle' : `Görsel ${index + 1} Yükle`}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleImageSelect(index, e)}
+                          className="hidden"
+                        />
+                      </label>
                     )}
                   </div>
                 ))}
-
-                {/* Upload Button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                  className="aspect-square rounded-lg border-2 border-dashed border-gray-300
-                           hover:border-elite-gold hover:bg-elite-gold/5 transition-colors
-                           flex flex-col items-center justify-center gap-2 text-gray-400
-                           hover:text-elite-gold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploading ? (
-                    <Loader2 className="w-8 h-8 animate-spin" />
-                  ) : (
-                    <>
-                      <Upload className="w-8 h-8" />
-                      <span className="text-xs">Görsel Ekle</span>
-                    </>
-                  )}
-                </button>
               </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-
-              <p className="text-sm text-gray-500">
-                JPEG, PNG, WebP veya GIF formatında, maksimum 5MB boyutunda görseller yükleyebilirsiniz.
-              </p>
             </div>
 
-            {/* SEO */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">SEO</h2>
+            {/* Durumlar */}
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-sm font-medium text-gray-700">Yayın Durumu</h3>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Meta Başlık
-                  </label>
-                  <input
-                    type="text"
-                    value={metaTitle}
-                    onChange={(e) => setMetaTitle(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="Arama motorlarında görünecek başlık"
-                  />
-                </div>
+              <label className="flex items-center justify-between p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+                <span className="text-sm text-gray-700">Yayında</span>
+                <input
+                  type="checkbox"
+                  checked={formData.is_published}
+                  onChange={(e) => handleToggle('is_published', e.target.checked)}
+                  className="w-4 h-4 text-elite-brown rounded border-gray-300 focus:ring-elite-brown"
+                />
+              </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Meta Açıklama
-                  </label>
-                  <textarea
-                    value={metaDescription}
-                    onChange={(e) => setMetaDescription(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none resize-none"
-                    placeholder="Arama motorlarında görünecek açıklama"
-                  />
-                </div>
-              </div>
+              <label className="flex items-center justify-between p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+                <span className="text-sm text-gray-700">Stokta Var</span>
+                <input
+                  type="checkbox"
+                  checked={formData.in_stock}
+                  onChange={(e) => handleToggle('in_stock', e.target.checked)}
+                  className="w-4 h-4 text-elite-brown rounded border-gray-300 focus:ring-elite-brown"
+                />
+              </label>
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Pricing */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Fiyatlandırma</h2>
+          {/* SAĞ TARAF (Detaylar) */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
 
+              {/* Ürün Adı */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  m² Fiyatı (TL) *
-                </label>
-                <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Ürün Adı</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="Örn: Kadife Fon Perde"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
+                />
+              </div>
+
+              {/* Kısa Açıklama */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Kısa Açıklama</label>
+                <input
+                  type="text"
+                  name="short_description"
+                  value={formData.short_description}
+                  onChange={handleChange}
+                  placeholder="Ürün kartlarında görünecek kısa açıklama"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
+                />
+              </div>
+
+              {/* Fiyat ve Kategori */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fiyat (TL)</label>
                   <input
                     type="number"
-                    value={basePrice}
-                    onChange={(e) => setBasePrice(e.target.value)}
+                    name="base_price"
                     required
                     min="0"
                     step="0.01"
-                    className="w-full px-4 py-2 pr-12 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="0.00"
+                    value={formData.base_price}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-                    TL
-                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Kategori</label>
+                  <select
+                    name="category_id"
+                    required
+                    value={formData.category_id}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown bg-white"
+                  >
+                    <option value="">Seçiniz</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            </div>
 
-            {/* Category */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Kategori</h2>
-
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                         focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                         transition-colors outline-none"
-              >
-                <option value="">Kategori Seçin</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Status */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Durum</h2>
-
-              <div className="space-y-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isPublished}
-                    onChange={(e) => setIsPublished(e.target.checked)}
-                    className="w-5 h-5 text-elite-gold border-gray-300 rounded
-                             focus:ring-elite-gold"
-                  />
-                  <div>
-                    <p className="font-medium text-gray-900">Yayında</p>
-                    <p className="text-sm text-gray-500">Ürün sitede görünür</p>
-                  </div>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={inStock}
-                    onChange={(e) => setInStock(e.target.checked)}
-                    className="w-5 h-5 text-elite-gold border-gray-300 rounded
-                             focus:ring-elite-gold"
-                  />
-                  <div>
-                    <p className="font-medium text-gray-900">Stokta</p>
-                    <p className="text-sm text-gray-500">Satışa açık</p>
-                  </div>
-                </label>
+              {/* Açıklama */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
+                <textarea
+                  name="description"
+                  rows={6}
+                  value={formData.description}
+                  onChange={handleChange}
+                  placeholder="Ürün özelliklerini buraya yazın..."
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown resize-none"
+                />
               </div>
+
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3
-                       bg-elite-gold text-white rounded-lg hover:bg-elite-gold/90
-                       transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Kaydediliyor...
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  {isEditMode ? 'Güncelle' : 'Oluştur'}
-                </>
-              )}
-            </button>
+            {/* Kaydet Butonu */}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-2 bg-elite-brown text-white px-8 py-3 rounded-lg hover:bg-opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    İşleniyor...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    {initialData ? 'Değişiklikleri Kaydet' : 'Ürünü Oluştur'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
         </div>
       </form>
     </div>

@@ -27,7 +27,6 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Status timeline
 const STATUS_TIMELINE: OrderStatus[] = [
   'PENDING',
   'PAID',
@@ -44,7 +43,6 @@ export default async function OrderDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // Get current status index for timeline
   const currentStatusIndex = STATUS_TIMELINE.indexOf(order.status as OrderStatus);
   const isCancelled = order.status === 'CANCELLED';
 
@@ -53,7 +51,7 @@ export default async function OrderDetailPage({ params }: PageProps) {
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <Link
-          href="/hesabim/siparisler"
+          href="/account/orders"
           className="inline-flex items-center gap-2 text-elite-gray hover:text-elite-gold mb-4 text-sm transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -84,7 +82,6 @@ export default async function OrderDetailPage({ params }: PageProps) {
           <h2 className="font-semibold text-elite-black mb-6">Sipariş Durumu</h2>
 
           <div className="relative">
-            {/* Progress Line */}
             <div className="absolute top-5 left-0 right-0 h-0.5 bg-gray-200">
               <div
                 className="h-full bg-elite-gold transition-all duration-500"
@@ -94,7 +91,6 @@ export default async function OrderDetailPage({ params }: PageProps) {
               />
             </div>
 
-            {/* Status Points */}
             <div className="relative flex justify-between">
               {STATUS_TIMELINE.map((status, idx) => {
                 const isCompleted = idx <= currentStatusIndex;
@@ -162,10 +158,8 @@ export default async function OrderDetailPage({ params }: PageProps) {
                   key={idx}
                   className="flex gap-4 p-4 border border-gray-100 rounded-lg"
                 >
-                  {/* Product Image */}
                   <div className="w-20 h-20 bg-gradient-to-br from-elite-gold/20 to-elite-bone rounded-lg flex-shrink-0" />
 
-                  {/* Details */}
                   <div className="flex-1 min-w-0">
                     <Link
                       href={`/urun/${item.product_slug}`}
@@ -200,7 +194,6 @@ export default async function OrderDetailPage({ params }: PageProps) {
                     </div>
                   </div>
 
-                  {/* Price */}
                   <div className="text-right">
                     <p className="text-sm text-elite-gray">x{item.quantity}</p>
                     <p className="font-semibold text-elite-black mt-1">

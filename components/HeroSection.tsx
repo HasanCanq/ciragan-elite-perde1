@@ -13,128 +13,93 @@ const heroImages = [
 export default function HeroSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Otomatik geçiş
   useEffect(() => {
-    const interval = setInterval(() => {
-      nextSlide();
-    }, 5000);
-
+    const interval = setInterval(() => nextSlide(), 5000);
     return () => clearInterval(interval);
-  }, [currentIndex]); // currentIndex değiştiğinde sayacı sıfırlasın ki kullanıcı tıkladıktan hemen sonra resim değişmesin
-
-  const prevSlide = () => {
-    const isFirstSlide = currentIndex === 0;
-    const newIndex = isFirstSlide ? heroImages.length - 1 : currentIndex - 1;
-    setCurrentIndex(newIndex);
-  };
+  }, [currentIndex]);
 
   const nextSlide = () => {
-    const isLastSlide = currentIndex === heroImages.length - 1;
-    const newIndex = isLastSlide ? 0 : currentIndex + 1;
-    setCurrentIndex(newIndex);
+    setCurrentIndex((prev) => (prev === heroImages.length - 1 ? 0 : prev + 1));
+  };
+
+  const prevSlide = () => {
+    setCurrentIndex((prev) => (prev === 0 ? heroImages.length - 1 : prev - 1));
   };
 
   return (
-    <section className="relative h-[600px] md:h-[700px] overflow-hidden group">
-      {/* Resimler */}
-      {heroImages.map((image, index) => (
-        <div
-          key={image}
-          className={`absolute inset-0 transition-opacity duration-1000 ${
-            index === currentIndex ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <Image
-            src={image}
-            alt={`Çırağan Elite Perde - ${index + 1}`}
-            fill
-            className="object-cover"
-            priority={index === 0}
-            sizes="100vw"
-          />
-        </div>
-      ))}
-
-      {/* Siyah Opak Katman */}
-      <div className="absolute inset-0 bg-black/50 z-10" />
-
-      {/* İçerik */}
-      <div className="relative z-20 h-full flex items-center justify-center text-center">
-        <div className="container mx-auto px-4">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white drop-shadow-lg">
-            Çırağan Elite Perde
-          </h1>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto drop-shadow-md">
-            Evinize zarafet katan, kişiye özel ölçü perdeler ve modern
-            tasarımlar.
-          </p>
-          <Link
-            href="/kategori/tum-urunler"
-            className="inline-block bg-white text-black px-8 py-4 rounded-full font-semibold hover:bg-elite-gold hover:text-white transition-colors duration-300 shadow-lg"
-          >
-            Alışverişe Başla
-          </Link>
-        </div>
-      </div>
-
-      {/* --- SOL OK BUTONU --- */}
-      <button
-        onClick={prevSlide}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-black transition-all duration-300 border border-white/20 hidden group-hover:block md:block"
-        aria-label="Önceki Slayt"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M15.75 19.5L8.25 12l7.5-7.5"
-          />
-        </svg>
-      </button>
-
-      {/* --- SAĞ OK BUTONU --- */}
-      <button
-        onClick={nextSlide}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 text-white backdrop-blur-sm hover:bg-white hover:text-black transition-all duration-300 border border-white/20 hidden group-hover:block md:block"
-        aria-label="Sonraki Slayt"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth={2}
-          stroke="currentColor"
-          className="w-6 h-6"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M8.25 4.5l7.5 7.5-7.5 7.5"
-          />
-        </svg>
-      </button>
-
-      {/* Alt Noktalar (Dots) */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-        {heroImages.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentIndex(index)}
-            className={`w-3 h-3 rounded-full transition-all duration-300 ${
-              index === currentIndex
-                ? "bg-white w-8"
-                : "bg-white/50 hover:bg-white/75"
+    /* DIŞ KAPSAYICI: 
+       Üst boşluğu (pt-24) kaldırdık. Navbar artık resmin üzerine biniyor.
+       Yanlardaki boşluğu (px) minimuma indirdik (Mobilde 2, Masaüstünde 4).
+    */
+    <section className="relative w-full bg-white px-2 md:px-4 pt-2 pb-6 transition-all duration-300">
+      
+      {/* VİTRİN KARTI:
+          h-[75vh]: Ekranın %75'i kadar yükseklik.
+          rounded-b-[3rem]: Sadece alt köşeleri genişçe yuvarlattık (Perde dökümü gibi).
+          rounded-t-[1.5rem]: Üst köşeleri çok hafif yuvarlattık.
+      */}
+      <div className="relative h-[75vh] md:h-[85vh] w-full overflow-hidden rounded-t-[1.5rem] rounded-b-[4rem] shadow-2xl group bg-gray-900">
+        
+        {/* Resim Katmanı */}
+        {heroImages.map((image, index) => (
+          <div
+            key={image}
+            className={`absolute inset-0 transition-opacity duration-1000 ${
+              index === currentIndex ? "opacity-100 scale-100" : "opacity-0 scale-105"
             }`}
-            aria-label={`Slide ${index + 1}`}
-          />
+          >
+            <Image
+              src={image}
+              alt="Çırağan Elite"
+              fill
+              className="object-cover transition-transform duration-[2000ms]"
+              priority={index === 0}
+            />
+          </div>
         ))}
+
+        {/* Gradyan Karartma: Üstten (Navbar için) ve Alttan (Yazı için) yumuşak geçiş */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/70 z-10" />
+
+        {/* İçerik */}
+        <div className="relative z-20 h-full flex flex-col items-center justify-center text-center px-4">
+          {/* Navbar altına gelmemesi için mt-20 verdik */}
+          <div className="mt-20">
+            <h1 className="text-4xl md:text-7xl font-bold mb-4 text-white drop-shadow-2xl tracking-tight uppercase">
+              Çırağan Elite Perde
+            </h1>
+            <p className="text-base md:text-xl text-white/80 mb-10 max-w-xl mx-auto font-light tracking-wide">
+              Yaşam alanınıza değer katan estetik dokunuşlar.
+            </p>
+            <Link
+              href="/kategori/tum-urunler"
+              className="bg-white text-elite-brown px-12 py-4 rounded-full font-bold hover:bg-elite-gold hover:text-white transition-all duration-500 shadow-xl tracking-widest text-sm"
+            >
+              KEŞFET
+            </Link>
+          </div>
+        </div>
+
+        {/* Kontrol Okları */}
+        <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 z-30 flex justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden md:flex">
+          <button onClick={prevSlide} className="p-3 rounded-full bg-white/10 text-white backdrop-blur-md hover:bg-white hover:text-black transition-all">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <button onClick={nextSlide} className="p-3 rounded-full bg-white/10 text-white backdrop-blur-md hover:bg-white hover:text-black transition-all">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+          </button>
+        </div>
+
+        {/* Noktalar */}
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 flex gap-3">
+          {heroImages.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentIndex(index)}
+              className={`h-1 transition-all duration-500 rounded-full ${index === currentIndex ? "bg-white w-12" : "bg-white/30 w-4"}`}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ShoppingBag, Menu, X, Search, User } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 
@@ -13,6 +14,7 @@ const categories = [
 ];
 
 export default function Navbar() {
+  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -22,45 +24,53 @@ export default function Navbar() {
   );
   const setCartOpen = useCartStore((state) => state.setCartOpen);
 
+  // --- MANTIK KATMANI ---
+  const isHiddenPage = pathname.startsWith('/admin') || 
+                       pathname.startsWith('/giris') || 
+                       pathname.startsWith('/auth');
+
+  const isHomePage = pathname === "/";
+
   useEffect(() => {
     setMounted(true);
-
     const handleScroll = () => {
-      setScrolled(window.scrollY > 10);
+      setScrolled(window.scrollY > 50);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  if (isHiddenPage) return null;
+
   return (
-    <>
-      {/* Top Bar — scrolls away with the page */}
-      <div className="bg-black text-white">
-        <div className="elite-container py-2">
-          <div className="flex items-center justify-between text-xs font-light tracking-wide">
-            <span className="hidden sm:block text-white/70">
-              Ücretsiz Kargo &nbsp;|&nbsp; 5.000 TL ve Üzeri Siparişlerde
-            </span>
-            <a
-              href="tel:05322959586"
-              className="text-white/80 hover:text-white transition-colors duration-300 ml-auto sm:ml-0"
-            >
-              0532 295 95 86
-            </a>
+    <header className="fixed top-0 left-0 w-full z-50 transition-all duration-500">
+      {/* Top Bar — Sadece Anasayfada ve henüz kaydırılmamışken görünür */}
+      {isHomePage && !scrolled && (
+        <div className="bg-black/20 backdrop-blur-sm text-white border-b border-white/10 transition-all duration-300">
+          <div className="elite-container py-2">
+            <div className="flex items-center justify-between text-xs font-light tracking-wide">
+              <span className="hidden sm:block text-white/70">
+                Ücretsiz Kargo &nbsp;|&nbsp; 5.000 TL ve Üzeri Siparişlerde
+              </span>
+              <a href="tel:05322959586" className="text-white/80 hover:text-white transition-colors">
+                0532 295 95 86
+              </a>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Main Navbar — sticky white bar */}
+      {/* Main Navbar */}
       <nav
-        className={`sticky top-0 z-50 bg-white transition-shadow duration-300 ${
-          scrolled ? "shadow-md" : "shadow-none"
+        className={`transition-all duration-500 ${
+          (!isHomePage || scrolled) 
+            ? "bg-elite-brown shadow-xl py-3" 
+            : "bg-transparent py-5"
         }`}
       >
         <div className="elite-container">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            {/* Logo */}
+          <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex-shrink-0">
               <Image
                 src="https://httjlhbvqksbdutrqoju.supabase.co/storage/v1/object/public/hero/logo.png"
@@ -68,112 +78,54 @@ export default function Navbar() {
                 width={160}
                 height={40}
                 priority
-                className="h-10 sm:h-12 w-auto"
+                className={`h-10 sm:h-12 w-auto transition-all duration-300 `}
               />
             </Link>
 
-            {/* Desktop Categories */}
             <div className="hidden md:flex items-center gap-8">
               {categories.map((category) => (
                 <Link
                   key={category.id}
                   href={`/kategori/${category.slug}`}
-                  className="text-elite-black font-medium text-[15px] hover:text-elite-gold transition-colors duration-300 relative group py-2"
+                  className="text-white font-medium text-[15px] hover:text-elite-gold transition-colors relative group py-2"
                 >
                   {category.name}
-                  <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-elite-gold transition-all duration-300 group-hover:w-full" />
+                  <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-white transition-all duration-300 group-hover:w-full" />
                 </Link>
               ))}
             </div>
 
-            {/* Right Icons */}
-            <div className="flex items-center gap-1 sm:gap-3">
-              {/* Search */}
-              <Link
-                href="/kategori/tum-urunler"
-                className="p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
-                aria-label="Ürün Ara"
-              >
-                <Search className="w-5 h-5" />
-              </Link>
-
-              {/* Account */}
-              <Link
-                href="/hesabim"
-                className="p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
-                aria-label="Hesabım"
-              >
-                <User className="w-5 h-5" />
-              </Link>
-
-              {/* Cart */}
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative p-2 text-elite-black hover:text-elite-gold transition-colors duration-300"
-                aria-label="Sepeti Aç"
-              >
+            <div className="flex items-center gap-1 sm:gap-3 text-white">
+              <Link href="/kategori/tum-urunler" className="p-2 hover:text-elite-gold transition-colors"><Search className="w-5 h-5" /></Link>
+              <Link href="/account" className="p-2 hover:text-elite-gold transition-colors"><User className="w-5 h-5" /></Link>
+              <button onClick={() => setCartOpen(true)} className="relative p-2 hover:text-elite-gold transition-colors">
                 <ShoppingBag className="w-5 h-5" />
                 {mounted && totalItems > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-elite-gold text-white text-[11px] rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-white text-elite-brown text-[11px] rounded-full flex items-center justify-center font-bold">
                     {totalItems > 99 ? "99+" : totalItems}
                   </span>
                 )}
               </button>
-
-              {/* Mobile Toggle */}
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="md:hidden p-2 text-elite-black hover:text-elite-gold transition-colors"
-                aria-label="Menüyü Aç/Kapat"
-              >
-                {isMenuOpen ? (
-                  <X className="w-6 h-6" />
-                ) : (
-                  <Menu className="w-6 h-6" />
-                )}
+              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden p-2 hover:text-elite-gold transition-colors">
+                {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Bottom border — subtle separator */}
-        <div className="border-b border-gray-100" />
-
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-100 absolute w-full left-0 top-full shadow-lg">
-            <div className="elite-container py-4">
-              <div className="flex flex-col">
-                {categories.map((category) => (
-                  <Link
-                    key={category.id}
-                    href={`/kategori/${category.slug}`}
-                    className="text-elite-black font-medium py-3 px-4 border-l-2 border-transparent hover:border-elite-gold hover:bg-gray-50 transition-all"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    {category.name}
-                  </Link>
-                ))}
-                <div className="h-px bg-gray-100 my-3 mx-4" />
-                <Link
-                  href="/hakkimizda"
-                  className="text-gray-500 hover:text-elite-black py-2 px-4 text-sm transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  Hakkımızda
+          <div className="md:hidden bg-white border-t border-gray-100 absolute w-full left-0 top-full shadow-lg text-black">
+            <div className="elite-container py-4 flex flex-col">
+              {categories.map((category) => (
+                <Link key={category.id} href={`/kategori/${category.slug}`} className="text-elite-black font-medium py-3 px-4 hover:bg-gray-50" onClick={() => setIsMenuOpen(false)}>
+                  {category.name}
                 </Link>
-                <Link
-                  href="/iletisim"
-                  className="text-gray-500 hover:text-elite-black py-2 px-4 text-sm transition-colors"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  İletişim
-                </Link>
-              </div>
+              ))}
             </div>
           </div>
         )}
       </nav>
-    </>
+    </header>
   );
 }

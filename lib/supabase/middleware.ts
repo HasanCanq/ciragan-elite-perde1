@@ -1,14 +1,12 @@
-// =====================================================
-// SUPABASE MIDDLEWARE HELPER
-// =====================================================
-
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,79 +14,52 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          response = NextResponse.next({
             request,
-          });
+          })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+            response.cookies.set(name, value, options)
+          )
         },
       },
     }
-  );
+  )
 
-  // Session'ı yenile (önemli!)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // 1. Kullanıcıyı getir
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // Admin rotaları koruması
+  // 2. GİZLİ ADMIN KORUMASI 🛡️
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    // Admin login sayfasına erişime izin ver
-    if (request.nextUrl.pathname === '/admin/login') {
-      // Eğer kullanıcı zaten giriş yapmışsa ve admin ise dashboard'a yönlendir
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+    
+    let isAdmin = false;
 
-        if (profile?.role === 'ADMIN') {
-          const url = request.nextUrl.clone();
-          url.pathname = '/admin/dashboard';
-          return NextResponse.redirect(url);
-        }
-      }
-      return supabaseResponse;
+    // Eğer kullanıcı giriş yapmışsa, veritabanından rolüne bak
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      isAdmin = profile?.role === 'ADMIN';
     }
 
-    // Diğer admin sayfaları için kimlik doğrulama gerekli
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin/login';
-      return NextResponse.redirect(url);
-    }
-
-    // Admin rolü kontrolü
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'ADMIN') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin/login';
-      return NextResponse.redirect(url);
+    // KRİTİK NOKTA: Kullanıcı yoksa VEYA Admin değilse -> 404'e gönder (Rewrite)
+    if (!user || !isAdmin) {
+      // Rewrite kullanıyoruz: URL değişmez (/admin kalır) ama içerik 404 olur.
+      return NextResponse.rewrite(new URL('/404', request.url));
     }
   }
 
-  // Hesap rotaları koruması (genel kullanıcı alanı)
-  if (request.nextUrl.pathname.startsWith('/hesabim')) {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/giris';
-      url.searchParams.set('redirect', request.nextUrl.pathname);
-      return NextResponse.redirect(url);
-    }
+  // 3. Admin Login Sayfası Koruması
+  // Eğer zaten giriş yapmışsa ve login sayfasına gitmeye çalışıyorsa panele at
+  if (request.nextUrl.pathname === '/admin/login' && user) {
+     return NextResponse.redirect(new URL('/admin/products', request.url));
   }
 
-  return supabaseResponse;
+  return response
 }
