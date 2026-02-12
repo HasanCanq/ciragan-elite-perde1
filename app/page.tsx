@@ -80,7 +80,7 @@ export default async function Home() {
           {featuredProducts.length === 0 ? (
             <p className="text-center text-gray-500">Öne çıkan ürün bulunamadı.</p>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 lg:gap-8">
               {featuredProducts.map((product) => (
                 <Link 
                   key={product.id} 
@@ -95,7 +95,7 @@ export default async function Home() {
                         alt={product.name}
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        sizes="(max-width: 640px) 50vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     ) : (
                        <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400">Resim Yok</div>
@@ -108,15 +108,15 @@ export default async function Home() {
                     )}
                   </div>
                   
-                  <div className="p-5">
-                    <div className="text-sm text-gray-500 mb-1">
+                  <div className="p-3 sm:p-5">
+                    <div className="text-xs sm:text-sm text-gray-500 mb-1">
                       {product.category?.name || 'Genel'}
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                    <h3 className="text-sm sm:text-lg font-bold text-gray-900 mb-1 sm:mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
                       {product.name}
                     </h3>
-                    <div className="flex justify-between items-center mt-4">
-                      <span className="font-bold text-xl text-gray-900">
+                    <div className="flex justify-between items-center mt-2 sm:mt-4">
+                      <span className="font-bold text-base sm:text-xl text-gray-900">
                         {product.base_price.toLocaleString('tr-TR')} ₺
                         <span className="text-xs font-normal text-gray-500 ml-1">/m²</span>
                       </span>

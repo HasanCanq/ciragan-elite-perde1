@@ -122,7 +122,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-6">
           {products.map((product) => (
             <Link
               key={product.id}
@@ -137,7 +137,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
                     alt={product.name}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-elite-bone to-gray-100">
@@ -159,42 +159,42 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
               </div>
 
               {/* Content */}
-              <div className="p-5">
+              <div className="p-3 sm:p-5">
                 {/* Category Badge */}
-                <div className="text-xs text-elite-gold font-medium uppercase tracking-wider mb-2">
+                <div className="text-xs text-elite-gold font-medium uppercase tracking-wider mb-1 sm:mb-2">
                   {product.category?.name || category.name}
                 </div>
 
                 {/* Product Name */}
-                <h3 className="font-serif text-lg font-semibold text-elite-black mb-2 group-hover:text-elite-gold transition-colors duration-300 line-clamp-2">
+                <h3 className="font-serif text-sm sm:text-lg font-semibold text-elite-black mb-1 sm:mb-2 group-hover:text-elite-gold transition-colors duration-300 line-clamp-2">
                   {product.name}
                 </h3>
 
                 {/* Short Description */}
                 {product.short_description && (
-                  <p className="text-elite-gray text-sm mb-4 line-clamp-2">
+                  <p className="text-elite-gray text-xs sm:text-sm mb-2 sm:mb-4 line-clamp-2 hidden sm:block">
                     {product.short_description}
                   </p>
                 )}
 
                 {/* Price and CTA */}
-                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                <div className="flex justify-between items-center pt-2 sm:pt-3 border-t border-gray-100">
                   <div>
-                    <span className="font-serif text-xl font-semibold text-elite-black">
+                    <span className="font-serif text-base sm:text-xl font-semibold text-elite-black">
                       {formatPrice(product.base_price)}
                     </span>
                     <span className="text-xs text-elite-gray ml-1">/m²</span>
                   </div>
 
                   {/* Arrow Button */}
-                  <div className="w-10 h-10 bg-elite-black rounded-full flex items-center justify-center group-hover:bg-elite-gold transition-colors duration-300">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-elite-black rounded-full flex items-center justify-center group-hover:bg-elite-gold transition-colors duration-300">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
                       strokeWidth={2}
                       stroke="currentColor"
-                      className="w-5 h-5 text-white"
+                      className="w-4 h-4 sm:w-5 sm:h-5 text-white"
                     >
                       <path
                         strokeLinecap="round"
