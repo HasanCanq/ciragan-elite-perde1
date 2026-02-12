@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { threedsPayment } from '@/lib/iyzico';
+import { logPaymentEvent } from '@/lib/payment-logger';
 
 // Supabase admin client (cookie context yok - banka redirect'i)
 function getAdminSupabase() {
@@ -35,6 +36,16 @@ export async function POST(request: NextRequest) {
       paymentId,
       conversationId,
       mdStatus,
+    });
+
+    // LOG: Callback alındı
+    logPaymentEvent(supabase, {
+      order_id: conversationId || undefined,
+      event_type: 'CALLBACK_RECEIVED',
+      payment_id: paymentId,
+      conversation_id: conversationId,
+      md_status: mdStatus,
+      raw_response: { status, paymentId, conversationId, mdStatus },
     });
 
     // ==========================================
@@ -74,6 +85,19 @@ export async function POST(request: NextRequest) {
     // ==========================================
     if (mdStatus !== '1') {
       console.error('[Payment Callback] 3DS başarısız, mdStatus:', mdStatus);
+
+      // LOG: 3DS doğrulama başarısız
+      logPaymentEvent(supabase, {
+        order_id: order.id,
+        user_id: order.user_id,
+        event_type: 'THREEDS_AUTH_FAILED',
+        payment_id: paymentId,
+        conversation_id: conversationId,
+        md_status: mdStatus,
+        error_message: `3D Secure doğrulama başarısız (mdStatus: ${mdStatus})`,
+        expected_amount: order.total_amount,
+      });
+
       await restoreStockAndCancel(supabase, order, '3D Secure doğrulama başarısız');
       return NextResponse.redirect(
         `${siteUrl}/odeme/basarisiz?order=${order.order_number}&reason=3ds_failed`
@@ -92,6 +116,21 @@ export async function POST(request: NextRequest) {
 
     if (authResult.status !== 'success') {
       console.error('[Payment Callback] Auth başarısız:', authResult.errorMessage);
+
+      // LOG: Auth başarısız
+      logPaymentEvent(supabase, {
+        order_id: order.id,
+        user_id: order.user_id,
+        event_type: 'THREEDS_AUTH_FAILED',
+        payment_id: paymentId,
+        conversation_id: conversationId,
+        md_status: mdStatus,
+        error_code: authResult.errorCode,
+        error_message: authResult.errorMessage,
+        expected_amount: order.total_amount,
+        raw_response: authResult as unknown as Record<string, unknown>,
+      });
+
       await restoreStockAndCancel(supabase, order, `Ödeme auth başarısız: ${authResult.errorMessage}`);
       return NextResponse.redirect(
         `${siteUrl}/odeme/basarisiz?order=${order.order_number}&reason=payment_failed`
@@ -109,6 +148,21 @@ export async function POST(request: NextRequest) {
         expected: expectedAmount,
         paid: paidAmount,
       });
+
+      // LOG: Tutar uyuşmazlığı (güvenlik olayı)
+      logPaymentEvent(supabase, {
+        order_id: order.id,
+        user_id: order.user_id,
+        event_type: 'AMOUNT_MISMATCH',
+        payment_id: paymentId,
+        conversation_id: conversationId,
+        expected_amount: expectedAmount,
+        paid_amount: paidAmount,
+        error_message: `Beklenen: ${expectedAmount} TL, Ödenen: ${paidAmount} TL`,
+        auth_code: authResult.authCode,
+        raw_response: authResult as unknown as Record<string, unknown>,
+      });
+
       await restoreStockAndCancel(supabase, order, `Tutar uyuşmazlığı: beklenen ${expectedAmount}, ödenen ${paidAmount}`);
       return NextResponse.redirect(
         `${siteUrl}/odeme/basarisiz?order=${order.order_number}&reason=amount_mismatch`
@@ -137,6 +191,19 @@ export async function POST(request: NextRequest) {
 
     console.log('[Payment Callback] Ödeme başarılı:', order.order_number);
 
+    // LOG: Ödeme başarılı
+    logPaymentEvent(supabase, {
+      order_id: order.id,
+      user_id: order.user_id,
+      event_type: 'PAYMENT_SUCCESS',
+      payment_id: paymentId,
+      conversation_id: conversationId,
+      md_status: mdStatus,
+      auth_code: authResult.authCode,
+      expected_amount: expectedAmount,
+      paid_amount: paidAmount,
+    });
+
     // ==========================================
     // 9. BAŞARILI SAYFASINA YÖNLENDİR
     // ==========================================
@@ -145,6 +212,15 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('[Payment Callback] Beklenmedik hata:', error);
+
+    // LOG: Beklenmedik hata
+    try {
+      logPaymentEvent(supabase, {
+        event_type: 'PAYMENT_FAILED',
+        error_message: error instanceof Error ? error.message : 'Beklenmedik callback hatası',
+      });
+    } catch { /* logger hatası yutulur */ }
+
     return NextResponse.redirect(
       `${siteUrl}/odeme/basarisiz?reason=unknown`
     );

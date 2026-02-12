@@ -360,6 +360,43 @@ export interface ThreedsInitResult {
   threeDSHtmlContent: string;
 }
 
+// =====================================================
+// PAYMENT TRANSACTION LOG TİPLERİ
+// =====================================================
+
+export type PaymentEventType =
+  | 'PAYMENT_INITIATED'
+  | 'THREEDS_INIT_SUCCESS'
+  | 'THREEDS_INIT_FAILED'
+  | 'CALLBACK_RECEIVED'
+  | 'THREEDS_AUTH_SUCCESS'
+  | 'THREEDS_AUTH_FAILED'
+  | 'PAYMENT_SUCCESS'
+  | 'PAYMENT_FAILED'
+  | 'AMOUNT_MISMATCH';
+
+export interface PaymentTransactionInsert {
+  order_id?: string;
+  user_id?: string;
+  event_type: PaymentEventType;
+  payment_id?: string;
+  conversation_id?: string;
+  md_status?: string;
+  error_code?: string;
+  error_message?: string;
+  auth_code?: string;
+  expected_amount?: number;
+  paid_amount?: number;
+  currency?: string;
+  ip_address?: string;
+  raw_response?: Record<string, unknown>;
+}
+
+export interface PaymentTransaction extends PaymentTransactionInsert {
+  id: string;
+  created_at: string;
+}
+
 export interface ContactFormData {
   name: string;
   email: string;

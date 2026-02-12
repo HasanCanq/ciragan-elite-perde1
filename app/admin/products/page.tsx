@@ -120,7 +120,7 @@ export default function AdminProductsPage() {
       {/* Tablo */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full min-w-[700px] text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="py-4 px-6 font-medium text-gray-500">Ürün</th>

@@ -18,6 +18,7 @@ import {
   validateStock,
   validateAndCalculatePrices,
 } from '@/lib/actions/checkout';
+import { logPaymentEvent } from '@/lib/payment-logger';
 import {
   CartItem,
   CheckoutFormData,
@@ -275,12 +276,37 @@ export async function initiateCreditCardPayment(
       basketItems,
     };
 
+    // LOG: Ödeme başlatılıyor
+    logPaymentEvent(supabase, {
+      order_id: order.id,
+      user_id: user.id,
+      event_type: 'PAYMENT_INITIATED',
+      conversation_id: order.id,
+      expected_amount: totalAmount,
+      currency: 'TRY',
+      ip_address: ip,
+    });
+
     const iyzicoResult = await threedsInitialize(iyzicoRequest);
 
     if (iyzicoResult.status !== 'success') {
       // Ödeme başlatılamadı - geri al
       await restoreStockAndCancelOrder(supabase, order.id, cartItems);
       console.error('Iyzico 3DS init hatası:', iyzicoResult.errorMessage);
+
+      // LOG: 3DS init başarısız
+      logPaymentEvent(supabase, {
+        order_id: order.id,
+        user_id: user.id,
+        event_type: 'THREEDS_INIT_FAILED',
+        conversation_id: order.id,
+        error_code: iyzicoResult.errorCode,
+        error_message: iyzicoResult.errorMessage,
+        expected_amount: totalAmount,
+        ip_address: ip,
+        raw_response: iyzicoResult as unknown as Record<string, unknown>,
+      });
+
       return {
         data: null,
         error: iyzicoResult.errorMessage || 'Ödeme başlatılamadı',
@@ -291,6 +317,18 @@ export async function initiateCreditCardPayment(
     // ==========================================
     // 10. 3DS HTML DÖNÜŞÜ
     // ==========================================
+
+    // LOG: 3DS init başarılı
+    logPaymentEvent(supabase, {
+      order_id: order.id,
+      user_id: user.id,
+      event_type: 'THREEDS_INIT_SUCCESS',
+      payment_id: iyzicoResult.paymentId,
+      conversation_id: order.id,
+      expected_amount: totalAmount,
+      ip_address: ip,
+    });
+
     const decodedHtml = Buffer.from(
       iyzicoResult.threeDSHtmlContent,
       'base64'
@@ -309,6 +347,16 @@ export async function initiateCreditCardPayment(
     };
   } catch (error) {
     console.error('initiateCreditCardPayment error:', error);
+
+    // LOG: Beklenmedik hata
+    try {
+      const supabase = await createClient();
+      logPaymentEvent(supabase, {
+        event_type: 'PAYMENT_FAILED',
+        error_message: error instanceof Error ? error.message : 'Beklenmedik hata',
+      });
+    } catch { /* logger hatası yutulur */ }
+
     return {
       data: null,
       error:
