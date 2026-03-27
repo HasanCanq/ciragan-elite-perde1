@@ -2,7 +2,8 @@
 
 // =====================================================
 // IYZICO PAYMENT SERVER ACTIONS
-// 3D Secure Kredi Kartı Ödeme İşlemleri
+// PCI-DSS Uyumlu — Kart verisi ASLA sunucumuza gelmez.
+// Iyzico Checkout Form (hosted iframe) kullanılır.
 // =====================================================
 
 import { createClient } from '@/lib/supabase/server';
@@ -10,8 +11,8 @@ import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import Iyzipay from 'iyzipay';
 import {
-  threedsInitialize,
-  type IyzicoThreedsInitRequest,
+  checkoutFormInitialize,
+  type IyzicoCheckoutFormRequest,
   type IyzicoBasketItem,
 } from '@/lib/iyzico';
 import {
@@ -19,11 +20,10 @@ import {
   validateAndCalculatePrices,
 } from '@/lib/actions/checkout';
 import { logPaymentEvent } from '@/lib/payment-logger';
+import { orderLimiter } from '@/lib/rate-limit';
 import {
   CartItem,
   CheckoutFormData,
-  CreditCardData,
-  ThreedsInitResult,
   ApiResponse,
   OrderInsert,
   Order,
@@ -31,14 +31,23 @@ import {
 } from '@/types';
 
 // =====================================================
-// ANA ÖDEME FONKSİYONU
+// PCI-DSS UYUMLU: IYZICO CHECKOUT FORM (hosted iframe)
+// Kart verisi SUNUCUMUZA GELMEZ — iyzico iframe'inde toplanır
 // =====================================================
 
-export async function initiateCreditCardPayment(
+export interface CheckoutFormResult {
+  orderId: string;
+  orderNumber: string;
+  /** Iyzico'nun iframe embed HTML'i — sayfada document.write ile render edilir */
+  checkoutFormContent: string;
+  /** Standalone ödeme sayfası URL'i (mobil fallback) */
+  paymentPageUrl: string;
+}
+
+export async function initiateCheckoutFormPayment(
   cartItems: CartItem[],
-  formData: CheckoutFormData,
-  cardData: CreditCardData
-): Promise<ApiResponse<ThreedsInitResult>> {
+  formData: CheckoutFormData
+): Promise<ApiResponse<CheckoutFormResult>> {
   try {
     const supabase = await createClient();
     const headersList = await headers();
@@ -47,98 +56,62 @@ export async function initiateCreditCardPayment(
       headersList.get('x-real-ip') ||
       '127.0.0.1';
 
-    // ==========================================
-    // 1. KULLANICI DOĞRULAMA
-    // ==========================================
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // 1. Kullanıcı doğrulama
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: null, error: 'Giriş yapmanız gerekiyor', success: false };
 
-    if (!user) {
-      return { data: null, error: 'Giriş yapmanız gerekiyor', success: false };
+    // 1a. Sipariş rate limit — aynı hesap max 5 ödeme girişimi / dakika
+    const rateCheck = await orderLimiter.limit(`checkout:${user.id}`);
+    if (!rateCheck.success) {
+      return {
+        data: null,
+        error: 'Çok fazla ödeme girişimi. Lütfen 1 dakika bekleyin.',
+        success: false,
+      };
     }
 
-    // ==========================================
-    // 2. KART VERİSİ DOĞRULAMA
-    // ==========================================
-    if (
-      !cardData.cardHolderName ||
-      !cardData.cardNumber ||
-      !cardData.expireMonth ||
-      !cardData.expireYear ||
-      !cardData.cvc
-    ) {
-      return { data: null, error: 'Kart bilgileri eksik', success: false };
-    }
+    // 1b. Profil: identity_number varsa kullan, yoksa Iyzico sandbox fallback
+    //     (identity_number sütunu ileride eklenecek — graceful degradation)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('identity_number')
+      .eq('id', user.id)
+      .single();
+    const identityNumber = (profile as any)?.identity_number?.trim() || '11111111111';
 
-    // ==========================================
-    // 3. SEPET KONTROLÜ
-    // ==========================================
+    // 2. Sepet kontrolü
     if (!cartItems || cartItems.length === 0) {
       return { data: null, error: 'Sepetiniz boş', success: false };
     }
 
-    // ==========================================
-    // 4. STOK KONTROLÜ
-    // ==========================================
+    // 3. Stok kontrolü
     const stockValidation = await validateStock(cartItems, supabase);
-
     if (!stockValidation.valid) {
-      return {
-        data: null,
-        error: `Stok hatası: ${stockValidation.errors.join(', ')}`,
-        success: false,
-      };
+      return { data: null, error: `Stok hatası: ${stockValidation.errors.join(', ')}`, success: false };
     }
 
-    // ==========================================
-    // 5. FİYAT DOĞRULAMA (SERVER-SIDE)
-    // ==========================================
+    // 4. Fiyat doğrulama (server-side)
     const priceValidation = await validateAndCalculatePrices(cartItems, supabase);
-
     if (!priceValidation.valid) {
-      return {
-        data: null,
-        error: `Fiyat hatası: ${priceValidation.errors.join(', ')}`,
-        success: false,
-      };
+      return { data: null, error: `Fiyat hatası: ${priceValidation.errors.join(', ')}`, success: false };
     }
 
     const { serverCalculatedItems, serverSubtotal } = priceValidation;
+    const shippingCost = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
+    const totalAmount = Math.round((serverSubtotal + shippingCost) * 100) / 100;
 
-    // ==========================================
-    // 6. KARGO & TOPLAM HESAPLA
-    // ==========================================
-    const shippingCost =
-      serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
-    const totalAmount =
-      Math.round((serverSubtotal + shippingCost) * 100) / 100;
-
-    // ==========================================
-    // 7. STOK DÜŞME
-    // ==========================================
+    // 5. Stok düş
     for (const item of cartItems) {
-      const { error: stockError } = await supabase.rpc(
-        'check_and_deduct_stock',
-        {
-          p_product_id: item.productId,
-          p_quantity: item.quantity,
-        }
-      );
-
+      const { error: stockError } = await supabase.rpc('check_and_deduct_stock', {
+        p_product_id: item.productId,
+        p_quantity: item.quantity,
+      });
       if (stockError) {
-        console.error('Stok düşme hatası:', stockError);
-        return {
-          data: null,
-          error: `Stok güncellenemedi: ${item.productName}`,
-          success: false,
-        };
+        return { data: null, error: `Stok güncellenemedi: ${item.productName}`, success: false };
       }
     }
 
-    // ==========================================
-    // 8. SİPARİŞ OLUŞTUR (PENDING)
-    // ==========================================
+    // 6. Sipariş oluştur (PENDING)
     const orderData: OrderInsert = {
       user_id: user.id,
       customer_email: formData.email,
@@ -164,119 +137,72 @@ export async function initiateCreditCardPayment(
       .single();
 
     if (orderError || !order) {
-      // Stokları geri yükle
       await restoreStock(supabase, cartItems);
-      console.error('Sipariş oluşturma hatası:', orderError);
-      return {
-        data: null,
-        error: 'Sipariş oluşturulamadı',
-        success: false,
-      };
+      return { data: null, error: 'Sipariş oluşturulamadı', success: false };
     }
 
-    // Sipariş kalemlerini ekle
-    const itemsWithOrderId = serverCalculatedItems.map((item) => ({
-      ...item,
-      order_id: order.id,
-    }));
-
+    // 7. Sipariş kalemleri
     const { error: itemsError } = await supabase
       .from('order_items')
-      .insert(itemsWithOrderId);
+      .insert(serverCalculatedItems.map(item => ({ ...item, order_id: order.id })));
 
     if (itemsError) {
       await supabase.from('orders').delete().eq('id', order.id);
       await restoreStock(supabase, cartItems);
-      console.error('Sipariş kalemleri hatası:', itemsError);
-      return {
-        data: null,
-        error: 'Sipariş detayları kaydedilemedi',
-        success: false,
-      };
+      return { data: null, error: 'Sipariş detayları kaydedilemedi', success: false };
     }
 
-    // ==========================================
-    // 9. IYZICO 3DS BAŞLAT
-    // ==========================================
+    // 8. Iyzico Checkout Form başlat — KARTSİZ istek
     const callbackUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/callback`;
+    const basketItems: IyzicoBasketItem[] = serverCalculatedItems.map((item, idx) => ({
+      id: item.product_id || `item-${idx}`,
+      name: item.product_name,
+      category1: 'Perde',
+      itemType: 'PHYSICAL' as const,
+      price: item.total_price.toFixed(2),
+    }));
 
-    // Basket items: Iyzico sum(basketItem.price) = price alanına eşit olmalı
-    const basketItems: IyzicoBasketItem[] = serverCalculatedItems.map(
-      (item, idx) => ({
-        id: item.product_id || `item-${idx}`,
-        name: item.product_name,
-        category1: 'Perde',
-        itemType: 'PHYSICAL' as const,
-        price: item.total_price.toFixed(2),
-      })
-    );
-
-    // Kargo ücreti varsa basket item olarak ekle
     if (shippingCost > 0) {
-      basketItems.push({
-        id: 'shipping',
-        name: 'Kargo Ücreti',
-        category1: 'Kargo',
-        itemType: 'PHYSICAL',
-        price: shippingCost.toFixed(2),
-      });
+      basketItems.push({ id: 'shipping', name: 'Kargo Ücreti', category1: 'Kargo', itemType: 'PHYSICAL', price: shippingCost.toFixed(2) });
     }
 
     const nameParts = formData.fullName.trim().split(/\s+/);
     const firstName = nameParts[0] || formData.fullName;
     const lastName = nameParts.slice(1).join(' ') || formData.fullName;
 
-    const iyzicoRequest: IyzicoThreedsInitRequest = {
+    const checkoutRequest: IyzicoCheckoutFormRequest = {
       locale: Iyzipay.LOCALE.TR,
       conversationId: order.id,
       price: serverSubtotal.toFixed(2),
       paidPrice: totalAmount.toFixed(2),
       currency: Iyzipay.CURRENCY.TRY,
-      installment: '1',
       basketId: order.order_number,
       paymentChannel: Iyzipay.PAYMENT_CHANNEL.WEB,
       paymentGroup: Iyzipay.PAYMENT_GROUP.PRODUCT,
       callbackUrl,
-      paymentCard: {
-        cardHolderName: cardData.cardHolderName,
-        cardNumber: cardData.cardNumber.replace(/\s/g, ''),
-        expireMonth: cardData.expireMonth,
-        expireYear: cardData.expireYear,
-        cvc: cardData.cvc,
-        registerCard: '0',
-      },
+      enabledInstallments: ['1', '2', '3', '6', '9'],
       buyer: {
         id: user.id,
         name: firstName,
         surname: lastName,
-        gsmNumber: formData.phone
-          ? `+90${formData.phone.replace(/\D/g, '').slice(-10)}`
-          : undefined,
+        gsmNumber: formData.phone ? `+90${formData.phone.replace(/\D/g, '').slice(-10)}` : undefined,
         email: formData.email,
-        identityNumber: '11111111111',
+        identityNumber, // profiles.identity_number → fallback: '11111111111'
         registrationAddress: formData.shippingAddress,
         ip,
         city: 'Istanbul',
         country: 'Turkey',
       },
-      shippingAddress: {
-        contactName: formData.fullName,
-        city: 'Istanbul',
-        country: 'Turkey',
-        address: formData.shippingAddress,
-      },
+      shippingAddress: { contactName: formData.fullName, city: 'Istanbul', country: 'Turkey', address: formData.shippingAddress },
       billingAddress: {
         contactName: formData.fullName,
         city: 'Istanbul',
         country: 'Turkey',
-        address: formData.sameAsBilling
-          ? formData.shippingAddress
-          : formData.billingAddress || formData.shippingAddress,
+        address: formData.sameAsBilling ? formData.shippingAddress : formData.billingAddress || formData.shippingAddress,
       },
       basketItems,
     };
 
-    // LOG: Ödeme başlatılıyor
     logPaymentEvent(supabase, {
       order_id: order.id,
       user_id: user.id,
@@ -287,52 +213,31 @@ export async function initiateCreditCardPayment(
       ip_address: ip,
     });
 
-    const iyzicoResult = await threedsInitialize(iyzicoRequest);
+    const formResult = await checkoutFormInitialize(checkoutRequest);
 
-    if (iyzicoResult.status !== 'success') {
-      // Ödeme başlatılamadı - geri al
+    if (formResult.status !== 'success') {
       await restoreStockAndCancelOrder(supabase, order.id, cartItems);
-      console.error('Iyzico 3DS init hatası:', iyzicoResult.errorMessage);
-
-      // LOG: 3DS init başarısız
       logPaymentEvent(supabase, {
         order_id: order.id,
         user_id: user.id,
         event_type: 'THREEDS_INIT_FAILED',
         conversation_id: order.id,
-        error_code: iyzicoResult.errorCode,
-        error_message: iyzicoResult.errorMessage,
+        error_code: formResult.errorCode,
+        error_message: formResult.errorMessage,
         expected_amount: totalAmount,
         ip_address: ip,
-        raw_response: iyzicoResult as unknown as Record<string, unknown>,
       });
-
-      return {
-        data: null,
-        error: iyzicoResult.errorMessage || 'Ödeme başlatılamadı',
-        success: false,
-      };
+      return { data: null, error: formResult.errorMessage || 'Ödeme formu başlatılamadı', success: false };
     }
 
-    // ==========================================
-    // 10. 3DS HTML DÖNÜŞÜ
-    // ==========================================
-
-    // LOG: 3DS init başarılı
     logPaymentEvent(supabase, {
       order_id: order.id,
       user_id: user.id,
       event_type: 'THREEDS_INIT_SUCCESS',
-      payment_id: iyzicoResult.paymentId,
       conversation_id: order.id,
       expected_amount: totalAmount,
       ip_address: ip,
     });
-
-    const decodedHtml = Buffer.from(
-      iyzicoResult.threeDSHtmlContent,
-      'base64'
-    ).toString('utf-8');
 
     revalidatePath('/admin/orders');
 
@@ -340,27 +245,17 @@ export async function initiateCreditCardPayment(
       data: {
         orderId: order.id,
         orderNumber: order.order_number,
-        threeDSHtmlContent: decodedHtml,
+        checkoutFormContent: formResult.checkoutFormContent,
+        paymentPageUrl: formResult.paymentPageUrl,
       },
       error: null,
       success: true,
     };
   } catch (error) {
-    console.error('initiateCreditCardPayment error:', error);
-
-    // LOG: Beklenmedik hata
-    try {
-      const supabase = await createClient();
-      logPaymentEvent(supabase, {
-        event_type: 'PAYMENT_FAILED',
-        error_message: error instanceof Error ? error.message : 'Beklenmedik hata',
-      });
-    } catch { /* logger hatası yutulur */ }
-
+    console.error('initiateCheckoutFormPayment error:', error);
     return {
       data: null,
-      error:
-        error instanceof Error ? error.message : 'Ödeme işlemi başarısız',
+      error: error instanceof Error ? error.message : 'Ödeme işlemi başarısız',
       success: false,
     };
   }

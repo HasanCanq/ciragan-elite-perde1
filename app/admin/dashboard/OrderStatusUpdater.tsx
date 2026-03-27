@@ -1,24 +1,15 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { updateOrderStatus } from '@/lib/actions';
-import { OrderStatus, ORDER_STATUS_LABELS } from '@/types';
+import { updateOrderStatus } from '@/lib/actions/orders';
+import { OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types';
+import { getAvailableTransitions, isTerminalStatus } from '@/lib/order-state-machine';
 import { Check, Loader2, ChevronDown } from 'lucide-react';
 
 interface OrderStatusUpdaterProps {
   orderId: string;
   currentStatus: OrderStatus;
 }
-
-
-const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  PENDING: ['PAID', 'CANCELLED'],
-  PAID: ['PROCESSING', 'CANCELLED'],
-  PROCESSING: ['SHIPPED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED'],
-  DELIVERED: [],
-  CANCELLED: [],
-};
 
 export function OrderStatusUpdater({
   orderId,
@@ -27,7 +18,7 @@ export function OrderStatusUpdater({
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const availableStatuses = STATUS_TRANSITIONS[currentStatus];
+  const availableStatuses = getAvailableTransitions(currentStatus);
 
   const handleStatusChange = (newStatus: OrderStatus) => {
     setIsOpen(false);
@@ -41,14 +32,17 @@ export function OrderStatusUpdater({
     });
   };
 
-  
-  if (availableStatuses.length === 0) {
+  if (isTerminalStatus(currentStatus)) {
     return (
       <span className="text-gray-400 text-sm flex items-center gap-1">
         <Check className="w-4 h-4" />
-        Tamamlandı
+        {ORDER_STATUS_LABELS[currentStatus]}
       </span>
     );
+  }
+
+  if (availableStatuses.length === 0) {
+    return null;
   }
 
   return (
@@ -57,7 +51,7 @@ export function OrderStatusUpdater({
         onClick={() => setIsOpen(!isOpen)}
         disabled={isPending}
         className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium
-                 text-elite-gold bg-elite-gold/10 rounded-lg hover:bg-elite-gold/20
+                 text-[#B89947] bg-[#FAFAFA] hover:bg-[#FAFAFA]
                  transition-colors disabled:opacity-50"
       >
         {isPending ? (
@@ -80,7 +74,7 @@ export function OrderStatusUpdater({
 
           {/* Dropdown */}
           <div
-            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg
+            className="absolute right-0 mt-2 w-52 bg-white
                       border border-gray-200 z-20 overflow-hidden"
           >
             {availableStatuses.map((status) => (
@@ -91,11 +85,11 @@ export function OrderStatusUpdater({
                          transition-colors flex items-center gap-2"
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${
-                    status === 'CANCELLED' ? 'bg-red-500' : 'bg-green-500'
-                  }`}
-                />
-                {ORDER_STATUS_LABELS[status]}
+                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium
+                    ${ORDER_STATUS_COLORS[status]}`}
+                >
+                  {ORDER_STATUS_LABELS[status]}
+                </span>
               </button>
             ))}
           </div>

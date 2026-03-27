@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Upload, X, Loader2, Save, ArrowLeft } from 'lucide-react';
-import { createProduct, updateProduct, getCategories } from '@/lib/actions/products';
+import { createProduct, updateProduct, getCategories, getCurtainModels } from '@/lib/actions/products';
 import { ProductWithCategory, Category } from '@/types';
+import { compressImage } from '@/lib/utils/image-compress';
 
 const MAX_IMAGES = 3;
 
@@ -17,6 +18,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [curtainModels, setCurtainModels] = useState<{ id: string; name: string; slug: string }[]>([]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -27,7 +29,15 @@ export default function ProductForm({ initialData }: ProductFormProps) {
     category_id: initialData?.category_id || '',
     in_stock: initialData?.in_stock ?? true,
     is_published: initialData?.is_published ?? false,
+    // Metretül cinsinden stok (ondalıklı)
+    stock_quantity: (initialData as any)?.stock_quantity ?? 0,
+    low_stock_threshold: (initialData as any)?.low_stock_threshold ?? 5,
+    // Birim maliyet ₺/m² — DB'de henüz yok (base_cost sütunu ileride eklenecek)
+    base_cost: (initialData as any)?.base_cost ?? 0,
+    model_id: (initialData as any)?.model_id || '',
   });
+
+  const [compressing, setCompressing] = useState(false);
 
   // Çoklu Resim State'i (3 slot)
   const existingUrls = initialData?.images || [];
@@ -44,13 +54,12 @@ export default function ProductForm({ initialData }: ProductFormProps) {
   });
 
   useEffect(() => {
-    const loadCategories = async () => {
-      const res = await getCategories();
-      if (res.success && res.data) {
-        setCategories(res.data);
-      }
+    const loadData = async () => {
+      const [catRes, modelRes] = await Promise.all([getCategories(), getCurtainModels()]);
+      if (catRes.success && catRes.data) setCategories(catRes.data);
+      if (modelRes.success && modelRes.data) setCurtainModels(modelRes.data);
     };
-    loadCategories();
+    loadData();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -62,22 +71,34 @@ export default function ProductForm({ initialData }: ProductFormProps) {
     setFormData(prev => ({ ...prev, [name]: checked }));
   };
 
-  const handleImageSelect = (slotIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (slotIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Dosya boyutu 5MB\'dan küçük olmalıdır.');
+    // 10 MB üzeri hard limit — compress fonksiyonu da kontrol eder ama erken uyar
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Dosya çok büyük. Maksimum 10 MB yüklenebilir.');
       e.target.value = '';
       return;
     }
 
-    const preview = URL.createObjectURL(file);
-    setSlots(prev => {
-      const next = [...prev];
-      next[slotIndex] = { type: 'new', file, preview };
-      return next;
-    });
+    setCompressing(true);
+    try {
+      // Canvas API ile WebP'e dönüştür, max 1200×900, %80 kalite
+      const compressed = await compressImage(file);
+      const preview = URL.createObjectURL(compressed);
+
+      setSlots(prev => {
+        const next = [...prev];
+        next[slotIndex] = { type: 'new', file: compressed, preview };
+        return next;
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Görsel işlenemedi.');
+      e.target.value = '';
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const handleRemoveImage = (slotIndex: number) => {
@@ -105,6 +126,15 @@ export default function ProductForm({ initialData }: ProductFormProps) {
       data.append('category_id', formData.category_id);
       data.append('in_stock', String(formData.in_stock));
       data.append('is_published', String(formData.is_published));
+      data.append('stock_quantity', parseFloat(String(formData.stock_quantity)).toFixed(2));
+      if (formData.model_id) data.append('model_id', formData.model_id);
+      data.append('low_stock_threshold', parseFloat(String(formData.low_stock_threshold)).toFixed(2));
+      // base_cost: DB sütunu henüz yok — şimdilik sadece loglanır, backend yoksayar
+      const baseCost = parseFloat(String(formData.base_cost));
+      if (!isNaN(baseCost) && baseCost > 0) {
+        data.append('base_cost', baseCost.toFixed(2));
+        console.log('[ProductForm] base_cost gönderildi (DB ready olmayınca logda kalır):', baseCost);
+      }
 
       // Çoklu resim: her slot için yeni dosya veya mevcut URL gönder
       const keptExistingUrls: string[] = [];
@@ -153,7 +183,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={() => router.back()}
-          className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+          className="p-2 hover:bg-gray-100 text-gray-600 transition-colors"
         >
           <ArrowLeft size={20} />
         </button>
@@ -169,7 +199,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
           <div className="lg:col-span-1 space-y-6">
 
             {/* Çoklu Görsel Yükleme (3 Slot) */}
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+            <div className="bg-white p-6 rounded-xl border border-gray-100">
               <label className="block text-sm font-medium text-gray-700 mb-4">
                 Ürün Görselleri ({slots.filter(Boolean).length}/{MAX_IMAGES})
               </label>
@@ -178,12 +208,12 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                 {slots.map((slot, index) => (
                   <div key={index} className="relative">
                     {/* Slot numarası */}
-                    <span className="absolute -top-2 -left-2 z-10 w-6 h-6 bg-elite-brown text-white text-xs rounded-full flex items-center justify-center font-bold">
+                    <span className="absolute -top-2 -left-2 z-10 w-6 h-6 bg-[#B89947] text-white text-xs flex items-center justify-center font-bold">
                       {index + 1}
                     </span>
 
                     {slot ? (
-                      <div className="relative aspect-[4/3] bg-gray-50 rounded-lg overflow-hidden group border border-gray-200">
+                      <div className="relative aspect-[4/3] bg-gray-50 overflow-hidden group border border-gray-200">
                         <Image
                           src={slot.type === 'existing' ? slot.url : slot.preview}
                           alt={`Görsel ${index + 1}`}
@@ -195,19 +225,19 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                           <button
                             type="button"
                             onClick={() => handleRemoveImage(index)}
-                            className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                            className="p-2 bg-red-500 text-white hover:bg-red-600 transition-colors"
                           >
                             <X className="w-5 h-5" />
                           </button>
                         </div>
                         {index === 0 && (
-                          <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-elite-brown text-white text-[10px] rounded font-medium">
+                          <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-[#B89947] text-white text-[10px] rounded font-medium">
                             Ana Görsel
                           </span>
                         )}
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center aspect-[4/3] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 cursor-pointer hover:border-elite-brown hover:bg-gray-100 transition-colors">
+                      <label className="flex flex-col items-center justify-center aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-300 cursor-pointer hover:border-[#B89947] hover:bg-gray-100 transition-colors">
                         <Upload className="w-6 h-6 text-gray-400 mb-1" />
                         <span className="text-xs text-gray-500">
                           {index === 0 ? 'Ana Görsel Yükle' : `Görsel ${index + 1} Yükle`}
@@ -226,26 +256,26 @@ export default function ProductForm({ initialData }: ProductFormProps) {
             </div>
 
             {/* Durumlar */}
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 space-y-4">
               <h3 className="text-sm font-medium text-gray-700">Yayın Durumu</h3>
 
-              <label className="flex items-center justify-between p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+              <label className="flex items-center justify-between p-3 border border-gray-200 cursor-pointer hover:bg-gray-50">
                 <span className="text-sm text-gray-700">Yayında</span>
                 <input
                   type="checkbox"
                   checked={formData.is_published}
                   onChange={(e) => handleToggle('is_published', e.target.checked)}
-                  className="w-4 h-4 text-elite-brown rounded border-gray-300 focus:ring-elite-brown"
+                  className="w-4 h-4 text-[#B89947] rounded border-gray-300 focus:ring-[#B89947]"
                 />
               </label>
 
-              <label className="flex items-center justify-between p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50">
+              <label className="flex items-center justify-between p-3 border border-gray-200 cursor-pointer hover:bg-gray-50">
                 <span className="text-sm text-gray-700">Stokta Var</span>
                 <input
                   type="checkbox"
                   checked={formData.in_stock}
                   onChange={(e) => handleToggle('in_stock', e.target.checked)}
-                  className="w-4 h-4 text-elite-brown rounded border-gray-300 focus:ring-elite-brown"
+                  className="w-4 h-4 text-[#B89947] rounded border-gray-300 focus:ring-[#B89947]"
                 />
               </label>
             </div>
@@ -253,7 +283,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
 
           {/* SAĞ TARAF (Detaylar) */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
+            <div className="bg-white p-6 rounded-xl border border-gray-100 space-y-6">
 
               {/* Ürün Adı */}
               <div>
@@ -265,7 +295,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Örn: Kadife Fon Perde"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
+                  className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]"
                 />
               </div>
 
@@ -278,14 +308,14 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                   value={formData.short_description}
                   onChange={handleChange}
                   placeholder="Ürün kartlarında görünecek kısa açıklama"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
+                  className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]"
                 />
               </div>
 
               {/* Fiyat ve Kategori */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Fiyat (TL)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Satış Fiyatı (₺/m²)</label>
                   <input
                     type="number"
                     name="base_price"
@@ -294,7 +324,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                     step="0.01"
                     value={formData.base_price}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown"
+                    className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]"
                   />
                 </div>
 
@@ -305,7 +335,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                     required
                     value={formData.category_id}
                     onChange={handleChange}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] bg-white"
                   >
                     <option value="">Seçiniz</option>
                     {categories.map((cat) => (
@@ -313,6 +343,56 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Perde Modeli */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Perde Modeli
+                  <span className="ml-2 text-xs font-normal text-gray-400">(Asistan için)</span>
+                </label>
+                <select
+                  name="model_id"
+                  value={formData.model_id}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] bg-white"
+                >
+                  <option value="">Model seçilmedi</option>
+                  {curtainModels.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  Perde Seçim Asistanı bu ürünü ilgili modelde gösterir
+                </p>
+              </div>
+
+              {/* Birim Maliyet */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Birim Maliyet (₺/m²)
+                  <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                    Yakında DB&apos;ye eklenecek
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  name="base_cost"
+                  min="0"
+                  step="0.01"
+                  value={formData.base_cost}
+                  onChange={handleChange}
+                  placeholder="Örn: 85.00"
+                  className="w-full px-4 py-2 border border-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-300/30 focus:border-amber-400 bg-amber-50/30"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Kumaş + işçilik maliyeti. Kâr marjı hesabında kullanılır.
+                  {formData.base_cost > 0 && formData.base_price > 0 && (
+                    <span className="ml-1 font-medium text-emerald-600">
+                      Marj: %{(((Number(formData.base_price) - Number(formData.base_cost)) / Number(formData.base_price)) * 100).toFixed(1)}
+                    </span>
+                  )}
+                </p>
               </div>
 
               {/* Açıklama */}
@@ -324,8 +404,54 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                   value={formData.description}
                   onChange={handleChange}
                   placeholder="Ürün özelliklerini buraya yazın..."
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown resize-none"
+                  className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] resize-none"
                 />
+              </div>
+
+              {/* Stok Yönetimi (Metretül) */}
+              <div className="border-t border-gray-100 pt-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">
+                  Stok Yönetimi
+                  <span className="ml-2 text-xs font-normal text-gray-400">(Metrekare cinsinden)</span>
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Stok (m²)
+                    </label>
+                    <input
+                      type="number"
+                      name="stock_quantity"
+                      min="0"
+                      step="0.5"
+                      value={formData.stock_quantity}
+                      onChange={handleChange}
+                      placeholder="Örn: 150.5"
+                      className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Depodaki toplam kumaş miktarı
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Düşük Stok Eşiği (m²)
+                    </label>
+                    <input
+                      type="number"
+                      name="low_stock_threshold"
+                      min="0"
+                      step="0.5"
+                      value={formData.low_stock_threshold}
+                      onChange={handleChange}
+                      placeholder="Örn: 5"
+                      className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Bu değerin altına düşünce uyarı verilir
+                    </p>
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -334,10 +460,15 @@ export default function ProductForm({ initialData }: ProductFormProps) {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={loading}
-                className="flex items-center gap-2 bg-elite-brown text-white px-8 py-3 rounded-lg hover:bg-opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || compressing}
+                className="flex items-center gap-2 bg-[#B89947] text-white px-8 py-3 hover:bg-opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? (
+                {compressing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Görsel sıkıştırılıyor...
+                  </>
+                ) : loading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     İşleniyor...

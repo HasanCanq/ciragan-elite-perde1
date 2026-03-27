@@ -10,12 +10,12 @@ interface ProductSortProps {
 }
 
 const SORT_OPTIONS = [
-  { value: 'recommended', label: 'Önerilen Sıralama' },
+  { value: 'recommended', label: 'Önerilen' },
   { value: 'price_asc', label: 'En Düşük Fiyat' },
   { value: 'price_desc', label: 'En Yüksek Fiyat' },
   { value: 'newest', label: 'En Yeniler' },
-  { value: 'name_asc', label: 'A-Z Sıralama' },
-  { value: 'name_desc', label: 'Z-A Sıralama' },
+  { value: 'name_asc', label: 'A-Z' },
+  { value: 'name_desc', label: 'Z-A' },
 ];
 
 export default function ProductSort({ currentSort, isMobile = false }: ProductSortProps) {
@@ -27,7 +27,6 @@ export default function ProductSort({ currentSort, isMobile = false }: ProductSo
 
   const currentOption = SORT_OPTIONS.find((opt) => opt.value === currentSort) || SORT_OPTIONS[0];
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -39,7 +38,6 @@ export default function ProductSort({ currentSort, isMobile = false }: ProductSo
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle sort change
   const handleSortChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -59,31 +57,28 @@ export default function ProductSort({ currentSort, isMobile = false }: ProductSo
       <div ref={dropdownRef} className="relative">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white
-                   border border-gray-200 rounded-xl text-elite-black font-medium
-                   hover:border-elite-gold transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-3
+                     border border-[#1A1A1A]/20 text-[#4A4A4A] text-[9px] tracking-[0.25em] uppercase
+                     hover:border-[#B89947]/60 hover:text-[#B89947] transition-colors duration-300 bg-white"
         >
-          <ArrowUpDown className="w-5 h-5" />
+          <ArrowUpDown className="w-4 h-4" />
           Sırala
         </button>
 
-        {/* Dropdown Menu */}
         {isOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg
-                        border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#1A1A1A]/20 z-50 shadow-sm">
             {SORT_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 onClick={() => handleSortChange(option.value)}
-                className={`w-full flex items-center justify-between px-4 py-3 text-left
-                          transition-colors ${
-                            currentSort === option.value
-                              ? 'bg-elite-gold/10 text-elite-gold'
-                              : 'text-elite-gray hover:bg-gray-50 hover:text-elite-black'
-                          }`}
+                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors duration-200 ${
+                  currentSort === option.value
+                    ? 'bg-[#B89947]/10 text-[#B89947]'
+                    : 'text-[#4A4A4A] hover:bg-[#B89947]/5 hover:text-[#B89947]'
+                }`}
               >
-                <span className="text-sm">{option.label}</span>
-                {currentSort === option.value && <Check className="w-4 h-4" />}
+                <span className="text-[9px] tracking-[0.2em] uppercase">{option.label}</span>
+                {currentSort === option.value && <Check className="w-3 h-3" />}
               </button>
             ))}
           </div>
@@ -96,39 +91,34 @@ export default function ProductSort({ currentSort, isMobile = false }: ProductSo
     <div ref={dropdownRef} className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg
-                 text-elite-black hover:border-elite-gold transition-colors min-w-[200px]"
+        className="flex items-center gap-3 px-4 py-2.5 border border-[#1A1A1A]/20 bg-white
+                   hover:border-[#B89947]/60 transition-colors duration-300 min-w-[180px]"
       >
-        <span className="text-sm text-elite-gray mr-1">Sırala:</span>
-        <span className="text-sm font-medium flex-1 text-left">{currentOption.label}</span>
+        <span className="text-[#9A9A9A] text-[8px] tracking-[0.2em] uppercase">Sırala</span>
+        <span className="text-[#4A4A4A] text-[9px] tracking-[0.15em] uppercase flex-1 text-left">{currentOption.label}</span>
         <ChevronDown
-          className={`w-4 h-4 text-elite-gray transition-transform duration-200 ${
+          className={`w-3.5 h-3.5 text-[#B89947]/50 transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
       </button>
 
-      {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-lg
-                      border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="py-1">
-            {SORT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => handleSortChange(option.value)}
-                className={`w-full flex items-center justify-between px-4 py-2.5 text-left
-                          transition-colors ${
-                            currentSort === option.value
-                              ? 'bg-elite-gold/10 text-elite-gold'
-                              : 'text-elite-gray hover:bg-gray-50 hover:text-elite-black'
-                          }`}
-              >
-                <span className="text-sm">{option.label}</span>
-                {currentSort === option.value && <Check className="w-4 h-4" />}
-              </button>
-            ))}
-          </div>
+        <div className="absolute top-full right-0 mt-1 w-52 bg-white border border-[#1A1A1A]/20 z-50 shadow-sm">
+          {SORT_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => handleSortChange(option.value)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors duration-200 ${
+                currentSort === option.value
+                  ? 'bg-[#B89947]/10 text-[#B89947]'
+                  : 'text-[#4A4A4A] hover:bg-[#B89947]/5 hover:text-[#B89947]'
+              }`}
+            >
+              <span className="text-[9px] tracking-[0.2em] uppercase">{option.label}</span>
+              {currentSort === option.value && <Check className="w-3 h-3" />}
+            </button>
+          ))}
         </div>
       )}
     </div>

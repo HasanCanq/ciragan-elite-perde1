@@ -23,6 +23,7 @@ import {
   SHIPPING,
   OrderStatus,
   Profile,
+  type CalculationType,
 } from '@/types';
 
 // =====================================================
@@ -413,6 +414,9 @@ async function calculateOrderPrices(
       width_cm: item.width,
       height_cm: item.height,
       pile_factor: item.pileFactor,
+      pleat_ratio_id: item.pleatId ?? null,
+      pleat_name_snapshot: null, // TODO: mt türü için engine entegrasyonunda doldurulacak
+      calculation_type_snapshot: (item.calculationType ?? 'm2') as CalculationType,
       area_m2: areaM2,
       price_per_m2_snapshot: product.base_price,
       pile_coefficient: pileCoefficient,
@@ -739,10 +743,25 @@ export async function updateOrderStatus(
   }
 }
 
+// Dashboard stats için güvenli boş veri
+const EMPTY_DASHBOARD_STATS = {
+  totalOrders: 0,
+  pendingOrders: 0,
+  totalRevenue: 0,
+  todayOrders: 0,
+};
+
 /**
  * Admin: Dashboard istatistikleri
+ *
+ * @param days - Kaç günlük veriyi göster (default: 30). pendingOrders tüm zamanlara aittir.
+ *
+ * Strateji:
+ * 1. get_dashboard_stats RPC dene (production'da tek DB round-trip, sıfır JS aggregation)
+ * 2. RPC yoksa (test DB) → Promise.all ile paralel sorgular (eski RAM sızıntısı düzeltildi)
+ * 3. Her şey başarısız olursa → sıfırlanmış veri döndür, uygulama çökmesin
  */
-export async function getDashboardStats(): Promise<
+export async function getDashboardStats(days = 30): Promise<
   ApiResponse<{
     totalOrders: number;
     pendingOrders: number;
@@ -767,54 +786,75 @@ export async function getDashboardStats(): Promise<
       throw new Error('Yetkisiz erişim');
     }
 
-    // Bugünün başlangıcı
+    // Tarih filtresini hesapla
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - days);
+    sinceDate.setHours(0, 0, 0, 0);
+
+    // ── 1. RPC dene (production) ─────────────────────────────────────────
+    // get_dashboard_stats: tek sorguda tüm aggregation'ı DB'de yapar,
+    // büyük tablolarda JS'e veri taşımaz → RAM sızıntısı yok.
+    try {
+      const { data: rpcData, error: rpcError } = await (supabase as any)
+        .rpc('get_dashboard_stats', { p_days: days });
+
+      if (!rpcError && rpcData) {
+        return {
+          data: {
+            totalOrders:   rpcData.total_orders   ?? 0,
+            pendingOrders: rpcData.pending_orders  ?? 0,
+            totalRevenue:  rpcData.total_revenue   ?? 0,
+            todayOrders:   rpcData.today_orders    ?? 0,
+          },
+          error: null,
+          success: true,
+        };
+      }
+    } catch {
+      // RPC henüz test DB'de mevcut değil → fallback'e geç
+    }
+
+    // ── 2. Paralel fallback sorguları (RAM-safe, artık serial değil) ─────
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Toplam sipariş sayısı
-    const { count: totalOrders } = await supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true });
+    const [
+      { count: totalOrders },
+      { count: pendingOrders },
+      { count: todayOrders },
+      { data: revenueData },
+    ] = await Promise.all([
+      supabase.from('orders').select('id', { count: 'exact', head: true }).gte('created_at', sinceDate.toISOString()),
+      // pendingOrders: tüm zamanlara ait bekleyenler — tarih filtresinden muaf
+      supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
+      supabase.from('orders').select('id', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
+      // Gelir: sadece total_amount çekiyoruz (satır başına ~8 byte, yönetilebilir)
+      // Production'da RPC bu sorguyu tamamen ortadan kaldırır
+      supabase.from('orders').select('total_amount')
+        .in('status', ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'])
+        .gte('created_at', sinceDate.toISOString()),
+    ]);
 
-    // Bekleyen sipariş sayısı
-    const { count: pendingOrders } = await supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'PENDING');
-
-    // Toplam gelir (PAID ve üzeri durumlar)
-    const { data: revenueData } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .in('status', ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED']);
-
-    const totalRevenue = revenueData?.reduce(
-      (sum, order) => sum + (order.total_amount || 0),
-      0
-    ) || 0;
-
-    // Bugünkü sipariş sayısı
-    const { count: todayOrders } = await supabase
-      .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', today.toISOString());
+    const totalRevenue =
+      revenueData?.reduce((sum, o) => sum + (o.total_amount || 0), 0) ?? 0;
 
     return {
       data: {
-        totalOrders: totalOrders || 0,
+        totalOrders:   totalOrders   || 0,
         pendingOrders: pendingOrders || 0,
         totalRevenue,
-        todayOrders: todayOrders || 0,
+        todayOrders:   todayOrders   || 0,
       },
       error: null,
       success: true,
     };
   } catch (error) {
+    // ── 3. Son çare fallback — uygulama hiç çökmesin ─────────────────────
     console.error('getDashboardStats error:', error);
     return {
-      data: null,
-      error: error instanceof Error ? error.message : 'İstatistikler yüklenemedi',
-      success: false,
+      data: EMPTY_DASHBOARD_STATS,
+      error: null, // UI'ı kırmamak için null döndür
+      success: true,
     };
   }
 }

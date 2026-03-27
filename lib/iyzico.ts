@@ -21,6 +21,8 @@ function getIyzipay(): Iyzipay {
 // TYPE DEFINITIONS
 // =====================================================
 
+/** @deprecated Ham kart verisi sunucudan geçer — PCI-DSS uyumsuz.
+ * Bunun yerine IyzicoCheckoutFormRequest kullanın. */
 export interface IyzicoPaymentCard {
   cardHolderName: string;
   cardNumber: string;
@@ -61,6 +63,69 @@ export interface IyzicoBasketItem {
   price: string;
 }
 
+// ─── Checkout Form (PCI-DSS uyumlu hosted form) ─────────────────────────────
+
+/** Kart verisi OLMAYAN checkout form isteği.
+ * Kart bilgileri Iyzico'nun hosted iframe'inde toplanır — sunucumuza gelmez. */
+export interface IyzicoCheckoutFormRequest {
+  locale: string;
+  conversationId: string;
+  price: string;
+  paidPrice: string;
+  currency: string;
+  basketId: string;
+  paymentChannel: string;
+  paymentGroup: string;
+  callbackUrl: string;
+  enabledInstallments: string[];
+  buyer: IyzicoBuyer;
+  shippingAddress: IyzicoAddress;
+  billingAddress: IyzicoAddress;
+  basketItems: IyzicoBasketItem[];
+}
+
+export interface IyzicoCheckoutFormInitResponse {
+  status: string;
+  locale: string;
+  systemTime: number;
+  conversationId: string;
+  token: string;                  // Checkout form token
+  checkoutFormContent: string;    // HTML/JS embed kodu
+  tokenExpireTime: number;
+  paymentPageUrl: string;         // Standalone ödeme sayfası URL'i
+  errorCode?: string;
+  errorMessage?: string;
+  errorGroup?: string;
+}
+
+export interface IyzicoCheckoutFormRetrieveRequest {
+  locale: string;
+  conversationId: string;
+  token: string;
+}
+
+export interface IyzicoCheckoutFormRetrieveResponse {
+  status: string;
+  locale: string;
+  systemTime: number;
+  conversationId: string;
+  paymentId: string;
+  price: number;
+  paidPrice: number;
+  currency: string;
+  installment: number;
+  basketId: string;
+  fraudStatus: number;
+  authCode?: string;
+  mdStatus?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  signature?: string;
+}
+
+// ─── 3DS (eski yöntem, kaldırılacak) ────────────────────────────────────────
+
+/** @deprecated Checkout Form kullanın */
 export interface IyzicoThreedsInitRequest {
   locale: string;
   conversationId: string;
@@ -79,6 +144,7 @@ export interface IyzicoThreedsInitRequest {
   basketItems: IyzicoBasketItem[];
 }
 
+/** @deprecated Checkout Form kullanın */
 export interface IyzicoThreedsInitResponse {
   status: string;
   locale: string;
@@ -122,6 +188,46 @@ export interface IyzicoThreedsAuthResponse {
 // PROMISE WRAPPERS
 // =====================================================
 
+/**
+ * PCI-DSS UYUMLU: Iyzico Checkout Form başlat.
+ * Kart verisi hiç bizim sunucumuza gelmez — iframe'de iyzico toplar.
+ */
+export function checkoutFormInitialize(
+  request: IyzicoCheckoutFormRequest
+): Promise<IyzicoCheckoutFormInitResponse> {
+  // iyzipay TS tanımlarında checkoutFormInitialize yok — runtime'da mevcut
+  const client = getIyzipay() as any;
+  return new Promise((resolve, reject) => {
+    client.checkoutFormInitialize.create(
+      request,
+      (err: Error | null, result: IyzicoCheckoutFormInitResponse) => {
+        if (err) return reject(err);
+        resolve(result);
+      }
+    );
+  });
+}
+
+/**
+ * PCI-DSS UYUMLU: Checkout Form token ile ödeme sonucunu sorgula.
+ * Callback'teki token ile ödeme durumunu doğrula.
+ */
+export function checkoutFormRetrieve(
+  request: IyzicoCheckoutFormRetrieveRequest
+): Promise<IyzicoCheckoutFormRetrieveResponse> {
+  const client = getIyzipay() as any;
+  return new Promise((resolve, reject) => {
+    client.checkoutFormRetrieve.retrieve(
+      request,
+      (err: Error | null, result: IyzicoCheckoutFormRetrieveResponse) => {
+        if (err) return reject(err);
+        resolve(result);
+      }
+    );
+  });
+}
+
+/** @deprecated Ham kart verisini sunucudan geçirir — PCI-DSS uyumsuz. checkoutFormInitialize kullanın. */
 export function threedsInitialize(
   request: IyzicoThreedsInitRequest
 ): Promise<IyzicoThreedsInitResponse> {

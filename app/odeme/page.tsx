@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -10,7 +10,7 @@ import {
   Phone,
   MapPin,
   CreditCard,
-  Building,
+  Building2,
   Truck,
   ShieldCheck,
   Loader2,
@@ -18,125 +18,233 @@ import {
   FileText,
   AlertTriangle,
   CheckCircle,
+  ChevronDown,
+  BookOpen,
+  Star,
 } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
-import { placeOrder, validateOrder, getServerCalculatedPrices } from '@/lib/actions/checkout';
-import { initiateCreditCardPayment } from '@/lib/actions/payment';
+import { placeOrder, validateOrder, getServerCalculatedPrices, type CheckoutFormInput } from '@/lib/actions/checkout';
+import { initiateCheckoutFormPayment } from '@/lib/actions/payment';
 import { syncCart } from '@/lib/actions/cart';
 import { formatPrice } from '@/lib/utils';
-import { PILE_LABELS_UPPER, SHIPPING, CheckoutFormData, CreditCardData } from '@/types';
+import { PILE_LABELS_UPPER, SHIPPING, type CheckoutFormData } from '@/types';
 import { createClient } from '@/lib/supabase/client';
+import { CITY_NAMES, getDistricts } from '@/lib/data/turkey-cities';
+
+// ── Yerel tipler ──────────────────────────────────────────────────────────────
+
+interface SavedAddress {
+  id: string;
+  title: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  address_line: string;
+  neighbourhood: string | null;
+  district: string;
+  city: string;
+  postal_code: string | null;
+  billing_type: 'INDIVIDUAL' | 'CORPORATE';
+  tax_number: string | null;
+  tax_office: string | null;
+  is_default: boolean;
+}
+
+interface LegalDoc {
+  id: string;
+  document_type: string;
+  version: string;
+  content_url: string | null;
+}
+
+interface AddressForm {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  addressLine: string;
+  neighbourhood: string;
+  city: string;
+  district: string;
+  postalCode: string;
+}
+
+interface BillingExtra {
+  billingType: 'INDIVIDUAL' | 'CORPORATE';
+  taxNumber: string;
+  taxOffice: string;
+  companyName: string;
+}
+
+const emptyAddress = (): AddressForm => ({
+  firstName: '',
+  lastName: '',
+  phone: '',
+  addressLine: '',
+  neighbourhood: '',
+  city: '',
+  district: '',
+  postalCode: '',
+});
+
+const emptyBillingExtra = (): BillingExtra => ({
+  billingType: 'INDIVIDUAL',
+  taxNumber: '',
+  taxOffice: '',
+  companyName: '',
+});
+
+const DOC_LABELS: Record<string, string> = {
+  ON_BILGILENDIRME: 'Ön Bilgilendirme Formu',
+  MESAFELI_SATIS:   'Mesafeli Satış Sözleşmesi',
+  KVKK_AYDINLATMA:  'KVKK Aydınlatma Metni',
+};
+
+// ── Bileşen ───────────────────────────────────────────────────────────────────
 
 export default function CheckoutPage() {
-  const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-  // Server-side hesaplanmış fiyatlar
-  const [serverPrices, setServerPrices] = useState<{
-    subtotal: number;
-    shippingCost: number;
-    total: number;
-  } | null>(null);
-
-  const items = useCartStore((state) => state.items);
-  const clearCart = useCartStore((state) => state.clearCart);
-  const getCartSummary = useCartStore((state) => state.getCartSummary);
-
-  // Form state
-  const [formData, setFormData] = useState<CheckoutFormData>({
-    email: '',
-    fullName: '',
-    phone: '',
-    shippingAddress: '',
-    billingAddress: '',
-    sameAsBilling: true,
-    customerNote: '',
-    paymentMethod: 'bank_transfer',
-  });
-
-  // Kredi kartı state
-  const [cardData, setCardData] = useState<CreditCardData>({
-    cardHolderName: '',
-    cardNumber: '',
-    expireMonth: '',
-    expireYear: '',
-    cvc: '',
-  });
-
+  const router   = useRouter();
   const supabase = createClient();
 
+  const [mounted, setMounted]             = useState(false);
+  const [isLoading, setIsLoading]         = useState(false);
+  const [isValidating, setIsValidating]   = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [isAuthenticated, setIsAuthenticated]   = useState<boolean | null>(null);
+
+  // Sepet
+  const items          = useCartStore((s) => s.items);
+  const clearCart      = useCartStore((s) => s.clearCart);
+  const getCartSummary = useCartStore((s) => s.getCartSummary);
+
+  // Server fiyatları
+  const [serverPrices, setServerPrices] = useState<{
+    subtotal: number; shippingCost: number; total: number;
+  } | null>(null);
+
+  // Kayıtlı adresler
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+
+  // Yasal belgeler
+  const [legalDocs, setLegalDocs]         = useState<LegalDoc[]>([]);
+  const [checkedDocIds, setCheckedDocIds] = useState<Set<string>>(new Set());
+
+  // Form alanları
+  const [email, setEmail]             = useState('');
+  const [shipping, setShipping]       = useState<AddressForm>(emptyAddress());
+  const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [billing, setBilling]         = useState<AddressForm>(emptyAddress());
+  const [billingExtra, setBillingExtra] = useState<BillingExtra>(emptyBillingExtra());
+  const [customerNote, setCustomerNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash_on_delivery' | 'credit_card'>('bank_transfer');
+
+  // İlçe listeleri (cascade)
+  const [shippingDistricts, setShippingDistricts] = useState<string[]>([]);
+  const [billingDistricts, setBillingDistricts]   = useState<string[]>([]);
+
+  // ── İl → ilçe cascade ───────────────────────────────────────────────────
+  useEffect(() => {
+    const list = getDistricts(shipping.city);
+    setShippingDistricts(list);
+    if (shipping.district && !list.includes(shipping.district)) {
+      setShipping((prev) => ({ ...prev, district: '' }));
+    }
+  }, [shipping.city]);
+
+  useEffect(() => {
+    const list = getDistricts(billing.city);
+    setBillingDistricts(list);
+    if (billing.district && !list.includes(billing.district)) {
+      setBilling((prev) => ({ ...prev, district: '' }));
+    }
+  }, [billing.city]);
+
+  // ── Auth + profil + adresler + yasal belgeler ───────────────────────────
   useEffect(() => {
     setMounted(true);
 
-    const checkAuth = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (!user) {
         setIsAuthenticated(false);
         return;
       }
-
       setIsAuthenticated(true);
 
-      // Get profile data to pre-fill form
+      // Profil
       const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
+        .select('email, full_name, phone')
         .eq('id', user.id)
         .single();
 
       if (profile) {
-        setFormData((prev) => ({
+        setEmail(profile.email || user.email || '');
+        // full_name → firstName + lastName ayrıştırması
+        const parts = (profile.full_name || '').trim().split(/\s+/);
+        setShipping((prev) => ({
           ...prev,
-          email: profile.email || user.email || '',
-          fullName: profile.full_name || '',
-          phone: profile.phone || '',
-          shippingAddress: profile.address || '',
+          firstName: parts[0] ?? '',
+          lastName:  parts.slice(1).join(' '),
+          phone:     profile.phone || '',
         }));
       } else {
-        setFormData((prev) => ({
-          ...prev,
-          email: user.email || '',
-        }));
+        setEmail(user.email || '');
+      }
+
+      // Kayıtlı adresler
+      const { data: addresses } = await supabase
+        .from('addresses')
+        .select('id, title, first_name, last_name, phone, address_line, neighbourhood, district, city, postal_code, billing_type, tax_number, tax_office, is_default')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false });
+
+      if (addresses?.length) {
+        setSavedAddresses(addresses as SavedAddress[]);
+        // Varsayılan adresi ön seç
+        const def = addresses.find((a) => a.is_default) ?? addresses[0];
+        applyAddress(def as SavedAddress);
+        setSelectedAddressId(def.id);
+      }
+
+      // Yasal belgeler
+      const { data: docs } = await supabase
+        .from('legal_document_versions')
+        .select('id, document_type, version, content_url')
+        .in('document_type', ['ON_BILGILENDIRME', 'MESAFELI_SATIS'])
+        .eq('is_active', true);
+
+      if (docs?.length) {
+        setLegalDocs(docs as LegalDoc[]);
       }
     };
 
-    checkAuth();
-  }, [supabase]);
+    init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Sepet değiştiğinde server-side fiyat doğrulama ve senkronizasyon
+  // ── Sepet fiyat doğrulama ────────────────────────────────────────────────
   useEffect(() => {
     if (!mounted || !isAuthenticated || items.length === 0) return;
 
     const validateAndSync = async () => {
       setIsValidating(true);
       setValidationErrors([]);
-
       try {
-        // Sepeti server'a senkronize et
         await syncCart(items);
-
-        // Server-side fiyatları al
         const pricesResult = await getServerCalculatedPrices(items);
         if (pricesResult.success && pricesResult.data) {
           setServerPrices({
-            subtotal: pricesResult.data.subtotal,
+            subtotal:     pricesResult.data.subtotal,
             shippingCost: pricesResult.data.shippingCost,
-            total: pricesResult.data.total,
+            total:        pricesResult.data.total,
           });
         }
-
-        // Sipariş doğrulama (stok ve fiyat)
         const validationResult = await validateOrder(items);
-        if (validationResult.success && validationResult.data) {
-          if (!validationResult.data.valid) {
-            setValidationErrors(validationResult.data.errors);
-          }
+        if (validationResult.success && validationResult.data && !validationResult.data.valid) {
+          setValidationErrors(validationResult.data.errors);
         }
       } catch (err) {
         console.error('Validation error:', err);
@@ -148,533 +256,661 @@ export default function CheckoutPage() {
     validateAndSync();
   }, [mounted, isAuthenticated, items]);
 
-  if (!mounted) {
-    return (
-      <div className="bg-elite-bone min-h-screen">
-        <div className="elite-container py-8 lg:py-12">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-48 mb-8" />
-            <div className="h-96 bg-gray-200 rounded" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // ── Kayıtlı adres seçimi ─────────────────────────────────────────────────
+  const applyAddress = useCallback((addr: SavedAddress) => {
+    setShipping({
+      firstName:    addr.first_name,
+      lastName:     addr.last_name,
+      phone:        addr.phone,
+      addressLine:  addr.address_line,
+      neighbourhood: addr.neighbourhood ?? '',
+      city:         addr.city,
+      district:     addr.district,
+      postalCode:   addr.postal_code ?? '',
+    });
+  }, []);
 
-  // Redirect to cart if empty
-  if (items.length === 0) {
-    return (
-      <div className="bg-elite-bone min-h-screen">
-        <div className="elite-container py-16 text-center">
-          <h1 className="font-serif text-2xl font-semibold text-elite-black mb-4">
-            Sepetiniz Boş
-          </h1>
-          <p className="text-elite-gray mb-8">
-            Ödeme yapabilmek için sepetinize ürün eklemeniz gerekmektedir.
-          </p>
-          <Link href="/" className="elite-button inline-flex">
-            Alışverişe Başla
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const handleSavedAddressSelect = (addr: SavedAddress) => {
+    setSelectedAddressId(addr.id);
+    applyAddress(addr);
+  };
 
-  // Redirect to login if not authenticated
-  if (isAuthenticated === false) {
-    return (
-      <div className="bg-elite-bone min-h-screen">
-        <div className="elite-container py-16 text-center">
-          <h1 className="font-serif text-2xl font-semibold text-elite-black mb-4">
-            Giriş Yapmanız Gerekiyor
-          </h1>
-          <p className="text-elite-gray mb-8">
-            Sipariş verebilmek için lütfen giriş yapın veya kayıt olun.
-          </p>
-          <Link
-            href={`/giris?redirect=/odeme`}
-            className="elite-button inline-flex"
-          >
-            Giriş Yap
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const clientSummary = getCartSummary();
-  // Server fiyatları varsa onları kullan, yoksa client fiyatlarını göster
-  const displaySubtotal = serverPrices?.subtotal ?? clientSummary.subtotal;
-  const displayShipping = serverPrices?.shippingCost ?? clientSummary.shippingCost;
-  const displayTotal = serverPrices?.total ?? clientSummary.total;
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  // ── Form yardımcıları ────────────────────────────────────────────────────
+  const updateShipping = (field: keyof AddressForm) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    setSelectedAddressId(null);
+    setShipping((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
-  // Kart numarası formatlama (4'lü gruplar)
-  const formatCardNumber = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 16);
-    return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
-  };
+  const updateBilling = (field: keyof AddressForm) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => setBilling((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const handleCardChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name === 'cardNumber') {
-      setCardData(prev => ({ ...prev, cardNumber: formatCardNumber(value) }));
-    } else {
-      setCardData(prev => ({ ...prev, [name]: value }));
-    }
-  };
+  const updateBillingExtra = (field: keyof BillingExtra) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => setBillingExtra((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const toggleDoc = (id: string) =>
+    setCheckedDocIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // ── Gönderim ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // Doğrulama hatası varsa işlemi durdur
       if (validationErrors.length > 0) {
         setError(`Sipariş doğrulama hatası: ${validationErrors.join(', ')}`);
         setIsLoading(false);
         return;
       }
 
-      if (formData.paymentMethod === 'credit_card') {
-        // Kart bilgisi kontrol
-        const cleanCardNumber = cardData.cardNumber.replace(/\s/g, '');
-        if (!cardData.cardHolderName || cleanCardNumber.length < 15 || !cardData.expireMonth || !cardData.expireYear || cardData.cvc.length < 3) {
-          setError('Lütfen kart bilgilerini eksiksiz doldurun');
-          setIsLoading(false);
-          return;
-        }
+      const allDocIds = legalDocs.map((d) => d.id);
+      const allChecked = allDocIds.every((id) => checkedDocIds.has(id));
+      if (legalDocs.length > 0 && !allChecked) {
+        setError('Devam etmek için tüm yasal belgeleri onaylamanız gerekmektedir.');
+        setIsLoading(false);
+        return;
+      }
 
-        // 3D Secure ödeme başlat
-        const result = await initiateCreditCardPayment(items, formData, cardData);
+      const formInput: CheckoutFormInput = {
+        email,
+        shippingAddress: {
+          firstName:     shipping.firstName,
+          lastName:      shipping.lastName,
+          phone:         shipping.phone,
+          addressLine:   shipping.addressLine,
+          neighbourhood: shipping.neighbourhood || undefined,
+          district:      shipping.district,
+          city:          shipping.city,
+          postalCode:    shipping.postalCode || undefined,
+        },
+        sameAsBilling,
+        billingAddress: sameAsBilling
+          ? undefined
+          : {
+              firstName:     billing.firstName,
+              lastName:      billing.lastName,
+              phone:         billing.phone,
+              addressLine:   billing.addressLine,
+              neighbourhood: billing.neighbourhood || undefined,
+              district:      billing.district,
+              city:          billing.city,
+              postalCode:    billing.postalCode || undefined,
+              billingType:   billingExtra.billingType,
+              taxNumber:     billingExtra.taxNumber || undefined,
+              taxOffice:     billingExtra.taxOffice || undefined,
+              companyName:   billingExtra.companyName || undefined,
+            },
+        customerNote: customerNote || undefined,
+        paymentMethod,
+        legalConsent:  { documentVersionIds: allDocIds },
+      };
 
+      if (paymentMethod === 'credit_card') {
+        // Uyumluluk katmanı — payment.ts eski tipi kullanıyor
+        const legacyFormData: CheckoutFormData = {
+          email,
+          fullName:        `${shipping.firstName} ${shipping.lastName}`.trim(),
+          phone:           shipping.phone,
+          shippingAddress: [
+            shipping.addressLine,
+            shipping.neighbourhood,
+            shipping.district,
+            shipping.city,
+            shipping.postalCode,
+          ].filter(Boolean).join(', '),
+          billingAddress: sameAsBilling ? undefined : [
+            billing.addressLine,
+            billing.neighbourhood,
+            billing.district,
+            billing.city,
+            billing.postalCode,
+          ].filter(Boolean).join(', '),
+          sameAsBilling,
+          customerNote,
+          paymentMethod: 'credit_card',
+        };
+
+        const result = await initiateCheckoutFormPayment(items, legacyFormData);
         if (!result.success || !result.data) {
           throw new Error(result.error || 'Ödeme başlatılamadı');
         }
-
-        // 3DS HTML'i render et - banka sayfası gösterilir
-        clearCart();
         document.open();
-        document.write(result.data.threeDSHtmlContent);
+        document.write(result.data.checkoutFormContent);
         document.close();
         return;
-      } else {
-        // Havale/EFT veya Kapıda Ödeme
-        const result = await placeOrder(items, formData);
-
-        if (!result.success || !result.data) {
-          throw new Error(result.error || 'Sipariş oluşturulamadı');
-        }
-
-        clearCart();
-        router.push(`/odeme/basarili?order=${result.data.orderNumber}`);
       }
+
+      const result = await placeOrder(items, formInput);
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Sipariş oluşturulamadı');
+      }
+
+      clearCart();
+      router.push(`/odeme/basarili?order=${result.data.orderNumber}`);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Bir hata oluştu. Lütfen tekrar deneyin.'
-      );
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu. Lütfen tekrar deneyin.');
       setIsLoading(false);
     }
   };
 
-  const hasValidationErrors = validationErrors.length > 0;
+  // ── Yükleniyor / boş sepet / giriş gerekli ───────────────────────────────
 
+  if (!mounted) {
+    return (
+      <div className="bg-white min-h-screen">
+        <div className="h-container py-10 lg:py-16">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-[#F3F4F6] w-48" />
+            <div className="h-96 bg-[#F3F4F6]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="bg-white min-h-screen">
+        <div className="h-container py-24 text-center">
+          <p className="h-eyebrow justify-center mb-6">Sepet</p>
+          <h1 className="font-serif text-black text-2xl tracking-[0.05em] mb-4">
+            Sepetiniz Boş
+          </h1>
+          <p className="text-[#9CA3AF] text-[11px] tracking-[0.1em] mb-10">
+            Ödeme yapabilmek için sepetinize ürün eklemeniz gerekmektedir.
+          </p>
+          <Link href="/" className="h-btn">Alışverişe Başla</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated === false) {
+    return (
+      <div className="bg-white min-h-screen">
+        <div className="h-container py-24 text-center">
+          <p className="h-eyebrow justify-center mb-6">Giriş Gerekli</p>
+          <h1 className="font-serif text-black text-2xl tracking-[0.05em] mb-4">
+            Giriş Yapmanız Gerekiyor
+          </h1>
+          <p className="text-[#9CA3AF] text-[11px] tracking-[0.1em] mb-10">
+            Sipariş verebilmek için lütfen giriş yapın veya kayıt olun.
+          </p>
+          <Link href={`/giris?redirect=/odeme`} className="h-btn">Giriş Yap</Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Görüntülenen değerler ────────────────────────────────────────────────
+  const clientSummary    = getCartSummary();
+  const displaySubtotal  = serverPrices?.subtotal     ?? clientSummary.subtotal;
+  const displayShipping  = serverPrices?.shippingCost ?? clientSummary.shippingCost;
+  const displayTotal     = serverPrices?.total        ?? clientSummary.total;
+  const hasValidErrors   = validationErrors.length > 0;
+
+  const allDocIds        = legalDocs.map((d) => d.id);
+  const allDocsChecked   = allDocIds.length === 0 || allDocIds.every((id) => checkedDocIds.has(id));
+
+  // ── Stil sabitleri ───────────────────────────────────────────────────────
+  const inputClass   = 'h-input';
+  const selectClass  = 'h-input appearance-none cursor-pointer pr-8 bg-white';
+  const sectionClass = 'border border-[#F3F4F6] p-6 bg-white';
+  const labelClass   = 'block text-[8px] text-[#9CA3AF] tracking-[0.2em] uppercase mb-2';
+
+  // ── JSX ──────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-elite-bone min-h-screen">
+    <div className="bg-white min-h-screen">
       {/* Breadcrumb */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="elite-container py-4">
-          <nav className="flex items-center gap-2 text-sm">
-            <Link
-              href="/"
-              className="text-elite-gray hover:text-elite-gold transition-colors"
-            >
+      <div className="border-b border-[#F3F4F6]">
+        <div className="h-container py-4">
+          <nav className="flex items-center gap-2">
+            <Link href="/" className="text-[#9CA3AF] text-[9px] tracking-[0.3em] uppercase hover:text-[#B89947] transition-colors duration-300">
               Ana Sayfa
             </Link>
-            <ChevronRight className="w-4 h-4 text-elite-gray" />
-            <Link
-              href="/sepet"
-              className="text-elite-gray hover:text-elite-gold transition-colors"
-            >
+            <ChevronRight className="w-3 h-3 text-[#B89947]/40" />
+            <Link href="/sepet" className="text-[#9CA3AF] text-[9px] tracking-[0.3em] uppercase hover:text-[#B89947] transition-colors duration-300">
               Sepet
             </Link>
-            <ChevronRight className="w-4 h-4 text-elite-gray" />
-            <span className="text-elite-black font-medium">Ödeme</span>
+            <ChevronRight className="w-3 h-3 text-[#B89947]/40" />
+            <span className="text-[#B89947]/70 text-[9px] tracking-[0.3em] uppercase">Ödeme</span>
           </nav>
         </div>
       </div>
 
-      <div className="elite-container py-8 lg:py-12">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-2xl lg:text-3xl font-semibold text-elite-black">
+      <div className="h-container py-10 lg:py-16">
+        <div className="flex items-center justify-between mb-10">
+          <h1 className="font-serif text-black text-2xl lg:text-3xl tracking-[0.05em]">
             Ödeme
           </h1>
-          <Link
-            href="/sepet"
-            className="text-sm text-elite-gray hover:text-elite-gold flex items-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
+          <Link href="/sepet" className="text-[#9CA3AF] text-[9px] tracking-[0.25em] uppercase hover:text-[#B89947] flex items-center gap-1.5 transition-colors duration-300">
+            <ArrowLeft className="w-3 h-3" />
             Sepete Dön
           </Link>
         </div>
 
-        {/* Validation Errors */}
-        {hasValidationErrors && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+        {/* Hata banner'ları */}
+        {hasValidErrors && (
+          <div className="mb-6 p-4 border border-red-300 bg-red-50">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-red-700">Sipariş doğrulama hatası</p>
-                <ul className="mt-2 text-sm text-red-600 list-disc list-inside">
-                  {validationErrors.map((err, idx) => (
-                    <li key={idx}>{err}</li>
-                  ))}
+                <p className="text-red-600 text-[9px] tracking-[0.2em] uppercase mb-2">Sipariş doğrulama hatası</p>
+                <ul className="text-red-500/80 text-[10px] space-y-1 list-disc list-inside">
+                  {validationErrors.map((err, idx) => <li key={idx}>{err}</li>)}
                 </ul>
               </div>
             </div>
           </div>
         )}
-
-        {/* General Error */}
-        {error && !hasValidationErrors && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
+        {error && !hasValidErrors && (
+          <div className="mb-6 p-4 border border-red-300 bg-red-50 text-red-600 text-[10px] tracking-[0.1em]">
             {error}
           </div>
         )}
-
-        {/* Validating Indicator */}
         {isValidating && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 border border-[#B89947]/30 bg-[#FAFAFA]">
             <div className="flex items-center gap-3">
-              <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-              <p className="text-blue-700">Sepet doğrulanıyor...</p>
+              <Loader2 className="w-4 h-4 text-[#B89947] animate-spin" />
+              <p className="text-[#B89947]/70 text-[9px] tracking-[0.2em] uppercase">Sepet doğrulanıyor...</p>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Checkout Form */}
+            {/* Sol sütun — form */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Contact Information */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="font-serif text-lg font-semibold text-elite-black mb-4 flex items-center gap-2">
-                  <User className="w-5 h-5 text-elite-gold" />
+
+              {/* ── Kayıtlı Adreslerim ── */}
+              {savedAddresses.length > 0 && (
+                <div className={sectionClass}>
+                  <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-4 flex items-center gap-2">
+                    <Star className="w-4 h-4 text-[#B89947]/60" />
+                    Kayıtlı Adreslerim
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {savedAddresses.map((addr) => {
+                      const isSelected = selectedAddressId === addr.id;
+                      return (
+                        <button
+                          key={addr.id}
+                          type="button"
+                          onClick={() => handleSavedAddressSelect(addr)}
+                          className={`text-left p-4 border transition-colors duration-200 ${
+                            isSelected
+                              ? 'border-[#B89947]/60 bg-[#FAFAFA]'
+                              : 'border-[#F3F4F6] hover:border-[#B89947]/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-black text-[9px] tracking-[0.2em] uppercase font-medium">
+                              {addr.title}
+                            </span>
+                            {addr.is_default && (
+                              <span className="text-[#B89947]/70 text-[7px] tracking-[0.15em] uppercase border border-[#B89947]/30 px-1.5 py-0.5">
+                                Varsayılan
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-black text-[9px] tracking-[0.05em]">
+                            {addr.first_name} {addr.last_name}
+                          </p>
+                          <p className="text-[#9CA3AF] text-[8px] tracking-[0.05em] mt-0.5 line-clamp-2">
+                            {addr.address_line}, {addr.district} / {addr.city}
+                          </p>
+                          {isSelected && (
+                            <div className="mt-2 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-[#B89947]/70" />
+                              <span className="text-[#B89947]/70 text-[7px] tracking-[0.15em] uppercase">Seçili</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-3 text-[#9CA3AF] text-[8px] tracking-[0.1em]">
+                    Farklı bir adres kullanmak için aşağıdaki alanlarda değişiklik yapabilirsiniz.
+                  </p>
+                </div>
+              )}
+
+              {/* ── İletişim Bilgileri ── */}
+              <div className={sectionClass}>
+                <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                  <User className="w-4 h-4 text-[#B89947]/60" />
                   İletişim Bilgileri
                 </h2>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-elite-gray mb-2">
-                      Ad Soyad *
-                    </label>
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={formData.fullName}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-200 rounded-lg
-                               focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                               transition-colors outline-none"
-                      placeholder="Ad Soyad"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-elite-gray mb-2">
-                      E-posta *
-                    </label>
+                    <label className={labelClass}>E-posta *</label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
                       <input
                         type="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg
-                                 focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                 transition-colors outline-none"
+                        className={`${inputClass} pl-10`}
                         placeholder="ornek@email.com"
                       />
                     </div>
                   </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-elite-gray mb-2">
-                      Telefon
-                    </label>
+                  <div>
+                    <label className={labelClass}>Telefon *</label>
                     <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
                       <input
                         type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg
-                                 focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                 transition-colors outline-none"
-                        placeholder="0555 555 55 55"
+                        value={shipping.phone}
+                        onChange={updateShipping('phone')}
+                        required
+                        className={`${inputClass} pl-10`}
+                        placeholder="05xx xxx xx xx"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Shipping Address */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="font-serif text-lg font-semibold text-elite-black mb-4 flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-elite-gold" />
+              {/* ── Teslimat Adresi ── */}
+              <div className={sectionClass}>
+                <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-[#B89947]/60" />
                   Teslimat Adresi
                 </h2>
 
-                <div>
-                  <label className="block text-sm font-medium text-elite-gray mb-2">
-                    Adres *
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3 w-5 h-5 text-elite-gray" />
-                    <textarea
-                      name="shippingAddress"
-                      value={formData.shippingAddress}
-                      onChange={handleInputChange}
-                      required
-                      rows={3}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg
-                               focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                               transition-colors outline-none resize-none"
-                      placeholder="Mahalle, Sokak, Bina No, Daire No, İlçe/İl"
+                <div className="space-y-4">
+                  {/* Ad / Soyad */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass}>Ad *</label>
+                      <input
+                        type="text"
+                        value={shipping.firstName}
+                        onChange={updateShipping('firstName')}
+                        required
+                        className={inputClass}
+                        placeholder="Adınız"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Soyad</label>
+                      <input
+                        type="text"
+                        value={shipping.lastName}
+                        onChange={updateShipping('lastName')}
+                        className={inputClass}
+                        placeholder="Soyadınız"
+                      />
+                    </div>
+                  </div>
+
+                  {/* İl / İlçe */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass}>İl *</label>
+                      <div className="relative">
+                        <select
+                          value={shipping.city}
+                          onChange={updateShipping('city')}
+                          required
+                          className={selectClass}
+                        >
+                          <option value="">İl seçin</option>
+                          {CITY_NAMES.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>İlçe *</label>
+                      <div className="relative">
+                        <select
+                          value={shipping.district}
+                          onChange={updateShipping('district')}
+                          required
+                          disabled={!shipping.city}
+                          className={`${selectClass} disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF] disabled:cursor-not-allowed`}
+                        >
+                          <option value="">{shipping.city ? 'İlçe seçin' : 'Önce il seçin'}</option>
+                          {shippingDistricts.map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mahalle */}
+                  <div>
+                    <label className={labelClass}>Mahalle</label>
+                    <input
+                      type="text"
+                      value={shipping.neighbourhood}
+                      onChange={updateShipping('neighbourhood')}
+                      className={inputClass}
+                      placeholder="Mahalle adı"
+                    />
+                  </div>
+
+                  {/* Adres satırı */}
+                  <div>
+                    <label className={labelClass}>Açık Adres *</label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-[#9CA3AF]" />
+                      <textarea
+                        value={shipping.addressLine}
+                        onChange={updateShipping('addressLine')}
+                        required
+                        rows={2}
+                        className={`${inputClass} pl-10 resize-none`}
+                        placeholder="Sokak, Bina No, Daire No..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Posta kodu */}
+                  <div className="md:w-1/3">
+                    <label className={labelClass}>Posta Kodu</label>
+                    <input
+                      type="text"
+                      value={shipping.postalCode}
+                      onChange={updateShipping('postalCode')}
+                      maxLength={5}
+                      className={inputClass}
+                      placeholder="34000"
                     />
                   </div>
                 </div>
 
-                <div className="mt-4">
+                {/* Fatura adresi aynı mı? */}
+                <div className="mt-5">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      name="sameAsBilling"
-                      checked={formData.sameAsBilling}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-elite-gold border-gray-300 rounded
-                               focus:ring-elite-gold"
+                      checked={sameAsBilling}
+                      onChange={(e) => setSameAsBilling(e.target.checked)}
+                      className="w-4 h-4 border border-[#B89947]/30 cursor-pointer accent-[#B89947]"
                     />
-                    <span className="text-sm text-elite-gray">
+                    <span className="text-[#9CA3AF] text-[9px] tracking-[0.2em] uppercase">
                       Fatura adresi teslimat adresi ile aynı
                     </span>
                   </label>
                 </div>
-
-                {!formData.sameAsBilling && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-elite-gray mb-2">
-                      Fatura Adresi *
-                    </label>
-                    <div className="relative">
-                      <Building className="absolute left-3 top-3 w-5 h-5 text-elite-gray" />
-                      <textarea
-                        name="billingAddress"
-                        value={formData.billingAddress}
-                        onChange={handleInputChange}
-                        required={!formData.sameAsBilling}
-                        rows={3}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg
-                                 focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                 transition-colors outline-none resize-none"
-                        placeholder="Fatura adresi"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Payment Method */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="font-serif text-lg font-semibold text-elite-black mb-4 flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-elite-gold" />
+              {/* ── Fatura Adresi (farklıysa) ── */}
+              {!sameAsBilling && (
+                <div className={sectionClass}>
+                  <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-[#B89947]/60" />
+                    Fatura Adresi
+                  </h2>
+
+                  {/* Bireysel / Kurumsal toggle */}
+                  <div className="flex gap-3 mb-6">
+                    {(['INDIVIDUAL', 'CORPORATE'] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setBillingExtra((prev) => ({ ...prev, billingType: type }))}
+                        className={`flex-1 py-2.5 text-[9px] tracking-[0.2em] uppercase border transition-colors duration-200 ${
+                          billingExtra.billingType === type
+                            ? 'border-black bg-black text-white'
+                            : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-black hover:text-black'
+                        }`}
+                      >
+                        {type === 'INDIVIDUAL' ? 'Bireysel' : 'Kurumsal'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Ad / Soyad */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Ad *</label>
+                        <input type="text" value={billing.firstName} onChange={updateBilling('firstName')} required={!sameAsBilling} className={inputClass} placeholder="Adınız" />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Soyad</label>
+                        <input type="text" value={billing.lastName} onChange={updateBilling('lastName')} className={inputClass} placeholder="Soyadınız" />
+                      </div>
+                    </div>
+
+                    {/* Kurumsal alanlar */}
+                    {billingExtra.billingType === 'CORPORATE' && (
+                      <div className="space-y-4 p-4 border border-[#F3F4F6] bg-[#FAFAFA]">
+                        <p className="text-[#9CA3AF] text-[8px] tracking-[0.15em] uppercase">Kurumsal Fatura Bilgileri</p>
+                        <div>
+                          <label className={labelClass}>Şirket Unvanı *</label>
+                          <input type="text" value={billingExtra.companyName} onChange={updateBillingExtra('companyName')} required className={inputClass} placeholder="Şirket Unvanı" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className={labelClass}>Vergi Numarası (VKN) *</label>
+                            <input type="text" value={billingExtra.taxNumber} onChange={updateBillingExtra('taxNumber')} required maxLength={10} className={inputClass} placeholder="1234567890" />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Vergi Dairesi *</label>
+                            <input type="text" value={billingExtra.taxOffice} onChange={updateBillingExtra('taxOffice')} required className={inputClass} placeholder="Kadıköy VD" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Telefon */}
+                    <div>
+                      <label className={labelClass}>Telefon *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+                        <input type="tel" value={billing.phone} onChange={updateBilling('phone')} required={!sameAsBilling} className={`${inputClass} pl-10`} placeholder="05xx xxx xx xx" />
+                      </div>
+                    </div>
+
+                    {/* İl / İlçe */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>İl *</label>
+                        <div className="relative">
+                          <select value={billing.city} onChange={updateBilling('city')} required={!sameAsBilling} className={selectClass}>
+                            <option value="">İl seçin</option>
+                            {CITY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelClass}>İlçe *</label>
+                        <div className="relative">
+                          <select value={billing.district} onChange={updateBilling('district')} required={!sameAsBilling} disabled={!billing.city} className={`${selectClass} disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF] disabled:cursor-not-allowed`}>
+                            <option value="">{billing.city ? 'İlçe seçin' : 'Önce il seçin'}</option>
+                            {billingDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mahalle */}
+                    <div>
+                      <label className={labelClass}>Mahalle</label>
+                      <input type="text" value={billing.neighbourhood} onChange={updateBilling('neighbourhood')} className={inputClass} placeholder="Mahalle adı" />
+                    </div>
+
+                    {/* Adres satırı */}
+                    <div>
+                      <label className={labelClass}>Açık Adres *</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-4 h-4 text-[#9CA3AF]" />
+                        <textarea value={billing.addressLine} onChange={updateBilling('addressLine')} required={!sameAsBilling} rows={2} className={`${inputClass} pl-10 resize-none`} placeholder="Sokak, Bina No, Daire No..." />
+                      </div>
+                    </div>
+
+                    {/* Posta kodu */}
+                    <div className="md:w-1/3">
+                      <label className={labelClass}>Posta Kodu</label>
+                      <input type="text" value={billing.postalCode} onChange={updateBilling('postalCode')} maxLength={5} className={inputClass} placeholder="34000" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Ödeme Yöntemi ── */}
+              <div className={sectionClass}>
+                <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-[#B89947]/60" />
                   Ödeme Yöntemi
                 </h2>
-
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-elite-gold transition-colors">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="bank_transfer"
-                      checked={formData.paymentMethod === 'bank_transfer'}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-elite-gold border-gray-300 focus:ring-elite-gold"
-                    />
-                    <div>
-                      <p className="font-medium text-elite-black">Havale / EFT</p>
-                      <p className="text-sm text-elite-gray">
-                        Banka havalesi ile ödeme
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-elite-gold transition-colors">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="cash_on_delivery"
-                      checked={formData.paymentMethod === 'cash_on_delivery'}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-elite-gold border-gray-300 focus:ring-elite-gold"
-                    />
-                    <div>
-                      <p className="font-medium text-elite-black">Kapıda Ödeme</p>
-                      <p className="text-sm text-elite-gray">
-                        Teslimat sırasında nakit veya kart ile ödeme
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-elite-gold transition-colors">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="credit_card"
-                      checked={formData.paymentMethod === 'credit_card'}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-elite-gold border-gray-300 focus:ring-elite-gold"
-                    />
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <p className="font-medium text-elite-black">Kredi Kartı</p>
-                        <p className="text-sm text-elite-gray">
-                          3D Secure ile güvenli ödeme
-                        </p>
+                  {[
+                    { value: 'bank_transfer',    label: 'Havale / EFT',   desc: 'Banka havalesi ile ödeme' },
+                    { value: 'cash_on_delivery', label: 'Kapıda Ödeme',  desc: 'Teslimat sırasında nakit veya kart' },
+                    { value: 'credit_card',      label: 'Kredi Kartı',   desc: '3D Secure ile güvenli ödeme' },
+                  ].map((method) => (
+                    <label
+                      key={method.value}
+                      className={`flex items-center gap-4 p-4 border cursor-pointer transition-colors duration-200 ${
+                        paymentMethod === method.value
+                          ? 'border-black bg-white'
+                          : 'border-[#F3F4F6] hover:border-black'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value={method.value}
+                        checked={paymentMethod === method.value}
+                        onChange={() => setPaymentMethod(method.value as typeof paymentMethod)}
+                        className="w-4 h-4 accent-[#B89947]"
+                      />
+                      <div className="flex-1">
+                        <p className="text-black text-[10px] tracking-[0.15em] uppercase">{method.label}</p>
+                        <p className="text-[#9CA3AF] text-[9px] tracking-[0.1em] mt-0.5">{method.desc}</p>
                       </div>
-                      <ShieldCheck className="w-5 h-5 text-green-500 ml-auto" />
-                    </div>
-                  </label>
-
-                  {/* Kredi Kartı Formu */}
-                  {formData.paymentMethod === 'credit_card' && (
-                    <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-elite-gray mb-1.5">
-                          Kart Üzerindeki İsim
-                        </label>
-                        <input
-                          type="text"
-                          name="cardHolderName"
-                          value={cardData.cardHolderName}
-                          onChange={handleCardChange}
-                          required
-                          placeholder="AD SOYAD"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg
-                                   focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                   transition-colors outline-none uppercase"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-elite-gray mb-1.5">
-                          Kart Numarası
-                        </label>
-                        <input
-                          type="text"
-                          name="cardNumber"
-                          value={cardData.cardNumber}
-                          onChange={handleCardChange}
-                          required
-                          maxLength={19}
-                          placeholder="0000 0000 0000 0000"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg
-                                   focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                   transition-colors outline-none font-mono tracking-wider"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
-                            Ay
-                          </label>
-                          <select
-                            name="expireMonth"
-                            value={cardData.expireMonth}
-                            onChange={handleCardChange}
-                            required
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
-                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                     transition-colors outline-none bg-white"
-                          >
-                            <option value="">Ay</option>
-                            {Array.from({ length: 12 }, (_, i) => {
-                              const month = String(i + 1).padStart(2, '0');
-                              return (
-                                <option key={month} value={month}>
-                                  {month}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
-                            Yıl
-                          </label>
-                          <select
-                            name="expireYear"
-                            value={cardData.expireYear}
-                            onChange={handleCardChange}
-                            required
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
-                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                     transition-colors outline-none bg-white"
-                          >
-                            <option value="">Yıl</option>
-                            {Array.from({ length: 11 }, (_, i) => {
-                              const year = String(new Date().getFullYear() + i);
-                              return (
-                                <option key={year} value={year}>
-                                  {year}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-elite-gray mb-1.5">
-                            CVC
-                          </label>
-                          <input
-                            type="password"
-                            name="cvc"
-                            value={cardData.cvc}
-                            onChange={handleCardChange}
-                            required
-                            maxLength={4}
-                            placeholder="***"
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
-                                     focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                                     transition-colors outline-none text-center font-mono"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 p-2 rounded">
-                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
-                        <span>
-                          Kart bilgileriniz 3D Secure ile güvenli şekilde işlenir.
-                          Bilgileriniz sunucularımızda saklanmaz.
+                      {method.value === 'credit_card' && (
+                        <ShieldCheck className="w-4 h-4 text-[#B89947]/50" />
+                      )}
+                    </label>
+                  ))}
+                  {paymentMethod === 'credit_card' && (
+                    <div className="mt-2 p-4 border border-[#F3F4F6] bg-[#FAFAFA]">
+                      <div className="flex items-center gap-2 text-[#B89947]/70">
+                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                        <span className="text-[9px] tracking-[0.1em]">
+                          Kart bilgileriniz Iyzico&apos;nun güvenli ödeme sayfasında girilir. Bilgileriniz sunucularımıza iletilmez.
                         </span>
                       </div>
                     </div>
@@ -682,124 +918,155 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Order Notes */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="font-serif text-lg font-semibold text-elite-black mb-4 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-elite-gold" />
-                  Sipariş Notu (Opsiyonel)
+              {/* ── Sipariş Notu ── */}
+              <div className={sectionClass}>
+                <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#B89947]/60" />
+                  Sipariş Notu
                 </h2>
-
                 <textarea
-                  name="customerNote"
-                  value={formData.customerNote}
-                  onChange={handleInputChange}
+                  value={customerNote}
+                  onChange={(e) => setCustomerNote(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none resize-none"
-                  placeholder="Siparişiniz ile ilgili özel istekleriniz varsa buraya yazabilirsiniz..."
+                  className={`${inputClass} resize-none`}
+                  placeholder="Özel istekleriniz varsa buraya yazabilirsiniz..."
                 />
               </div>
+
+              {/* ── Yasal Onaylar ── */}
+              {legalDocs.length > 0 && (
+                <div className={sectionClass}>
+                  <h2 className="font-serif text-black text-[11px] tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-[#B89947]/60" />
+                    Sözleşme Onayları
+                  </h2>
+                  <div className="space-y-3">
+                    {legalDocs.map((doc) => (
+                      <label key={doc.id} className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={checkedDocIds.has(doc.id)}
+                          onChange={() => toggleDoc(doc.id)}
+                          className="w-4 h-4 mt-0.5 border border-[#B89947]/30 cursor-pointer accent-[#B89947] shrink-0"
+                        />
+                        <span className="text-[#9CA3AF] text-[9px] tracking-[0.1em] leading-relaxed">
+                          {DOC_LABELS[doc.document_type] ?? doc.document_type}
+                          {' '}v{doc.version}&apos;i okudum, anladım ve kabul ediyorum.
+                          {doc.content_url && (
+                            <>
+                              {' '}
+                              <a
+                                href={doc.content_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[#B89947]/80 underline hover:text-[#B89947] transition-colors duration-200"
+                              >
+                                Metni oku
+                              </a>
+                            </>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {!allDocsChecked && (
+                    <p className="mt-3 text-[#9CA3AF] text-[8px] tracking-[0.1em]">
+                      Siparişi tamamlamak için tüm sözleşmeleri onaylamanız gerekmektedir.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Order Summary */}
+            {/* Sağ sütun — sipariş özeti */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
-                <h2 className="font-serif text-xl font-semibold text-elite-black mb-6">
+              <div className="border border-[#F3F4F6] p-6 sticky top-24 bg-white">
+                <h2 className="font-serif text-black text-[13px] tracking-[0.15em] uppercase mb-6">
                   Sipariş Özeti
                 </h2>
 
-                {/* Server Validated Badge */}
-                {serverPrices && !isValidating && !hasValidationErrors && (
-                  <div className="mb-4 p-2 bg-green-50 rounded-lg flex items-center gap-2 text-sm text-green-700">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Fiyatlar doğrulandı</span>
+                {serverPrices && !isValidating && !hasValidErrors && (
+                  <div className="mb-4 p-2 border border-[#F3F4F6] bg-[#FAFAFA] flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-[#B89947]/60" />
+                    <span className="text-[#B89947]/60 text-[8px] tracking-[0.2em] uppercase">Fiyatlar doğrulandı</span>
                   </div>
                 )}
 
-                {/* Items */}
+                {/* Ürünler */}
                 <div className="space-y-4 mb-6">
                   {items.map((item, idx) => (
                     <div key={idx} className="flex gap-3">
-                      <div className="w-16 h-16 bg-gradient-to-br from-elite-gold/20 to-elite-bone rounded-lg flex-shrink-0" />
+                      <div className="w-14 h-14 bg-[#F3F4F6] border border-[#F3F4F6] shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-elite-black text-sm truncate">
-                          {item.productName}
+                        <p className="text-black text-[9px] tracking-[0.1em] truncate">{item.productName}</p>
+                        <p className="text-[#9CA3AF] text-[8px] tracking-[0.05em] mt-0.5">
+                          {item.width}x{item.height}cm &bull; {PILE_LABELS_UPPER[item.pileFactor]}
                         </p>
-                        <p className="text-xs text-elite-gray">
-                          {item.width}x{item.height}cm • {PILE_LABELS_UPPER[item.pileFactor]}
-                        </p>
-                        <p className="text-xs text-elite-gray">
-                          x{item.quantity}
-                        </p>
+                        <p className="text-[#9CA3AF] text-[8px]">x{item.quantity}</p>
                       </div>
-                      <p className="font-medium text-sm">
-                        {formatPrice(item.unitPrice * item.quantity)}
-                      </p>
+                      <p className="text-black text-[10px]">{formatPrice(item.unitPrice * item.quantity)}</p>
                     </div>
                   ))}
                 </div>
 
-                {/* Totals */}
-                <div className="space-y-3 text-sm border-t border-gray-100 pt-4">
+                {/* Tutarlar */}
+                <div className="space-y-3 border-t border-[#F3F4F6] pt-4">
                   <div className="flex justify-between">
-                    <span className="text-elite-gray">Ara Toplam</span>
-                    <span className="font-medium">{formatPrice(displaySubtotal)}</span>
+                    <span className="text-[#9CA3AF] text-[9px] tracking-[0.15em] uppercase">Ara Toplam</span>
+                    <span className="text-black text-[10px]">{formatPrice(displaySubtotal)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-elite-gray">Kargo</span>
-                    <span className="font-medium">
-                      {displayShipping > 0 ? (
-                        formatPrice(displayShipping)
-                      ) : (
-                        <span className="text-green-600">Ücretsiz</span>
-                      )}
+                    <span className="text-[#9CA3AF] text-[9px] tracking-[0.15em] uppercase">Kargo</span>
+                    <span className="text-[10px]">
+                      {displayShipping > 0
+                        ? <span className="text-black">{formatPrice(displayShipping)}</span>
+                        : <span className="text-[#B89947]/70">Ücretsiz</span>
+                      }
                     </span>
                   </div>
                   {displayShipping > 0 && (
-                    <p className="text-xs text-elite-gray">
-                      {formatPrice(SHIPPING.FREE_THRESHOLD - displaySubtotal)} daha
-                      ekleyin, kargo bedava!
+                    <p className="text-[#9CA3AF] text-[8px] tracking-[0.05em]">
+                      {formatPrice(SHIPPING.FREE_THRESHOLD - displaySubtotal)} daha ekleyin, kargo bedava!
                     </p>
                   )}
                 </div>
 
-                <div className="border-t border-gray-100 my-4 pt-4">
+                <div className="border-t border-[#F3F4F6] my-4 pt-4">
                   <div className="flex justify-between items-center">
-                    <span className="font-medium text-elite-black">Toplam</span>
-                    <span className="font-serif text-2xl font-bold text-elite-gold">
+                    <span className="text-black text-[9px] tracking-[0.2em] uppercase">Toplam</span>
+                    <span className="font-serif text-[#B89947] font-bold text-xl">
                       {formatPrice(displayTotal)}
                     </span>
                   </div>
-                  <p className="text-xs text-elite-gray mt-1">KDV dahil</p>
+                  <p className="text-[#9CA3AF] text-[8px] tracking-[0.05em] mt-1">KDV dahil</p>
                 </div>
 
-                {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isLoading || isValidating || hasValidationErrors}
-                  className="w-full elite-button justify-center mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading || isValidating || hasValidErrors || !allDocsChecked}
+                  className="h-btn w-full mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : isValidating ? (
                     'Doğrulanıyor...'
-                  ) : hasValidationErrors ? (
-                    'Hata - Sepeti Kontrol Edin'
+                  ) : hasValidErrors ? (
+                    'Hata — Sepeti Kontrol Et'
+                  ) : !allDocsChecked && legalDocs.length > 0 ? (
+                    'Sözleşmeleri Onaylayın'
                   ) : (
                     'Siparişi Tamamla'
                   )}
                 </button>
 
-                {/* Trust Badges */}
-                <div className="mt-6 pt-6 border-t border-gray-100 space-y-3">
-                  <div className="flex items-center gap-3 text-sm text-elite-gray">
-                    <ShieldCheck className="w-5 h-5 text-elite-gold flex-shrink-0" />
-                    <span>Güvenli ödeme ve 2 yıl garanti</span>
+                <div className="mt-6 pt-6 border-t border-[#F3F4F6] space-y-3">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="w-4 h-4 text-[#B89947]/40 shrink-0" />
+                    <span className="text-[#9CA3AF] text-[8px] tracking-[0.1em]">Güvenli ödeme ve 2 yıl garanti</span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-elite-gray">
-                    <Truck className="w-5 h-5 text-elite-gold flex-shrink-0" />
-                    <span>Hızlı ve güvenli teslimat</span>
+                  <div className="flex items-center gap-3">
+                    <Truck className="w-4 h-4 text-[#B89947]/40 shrink-0" />
+                    <span className="text-[#9CA3AF] text-[8px] tracking-[0.1em]">Hızlı ve güvenli teslimat</span>
                   </div>
                 </div>
               </div>

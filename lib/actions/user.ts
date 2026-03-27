@@ -4,6 +4,7 @@
 // USER SERVER ACTIONS - Profile & Address Management
 // =====================================================
 
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { ApiResponse } from '@/types';
@@ -398,6 +399,60 @@ export async function deleteAddress(
       error: error instanceof Error ? error.message : 'Adres silinemedi',
       success: false,
     };
+  }
+}
+
+// =====================================================
+// PASSWORD ACTIONS
+// =====================================================
+
+const passwordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, 'Şifre en az 8 karakter olmalıdır')
+      .regex(/[A-Z]/, 'Şifre en az bir büyük harf içermelidir')
+      .regex(/[0-9]/, 'Şifre en az bir rakam içermelidir'),
+    confirm: z.string(),
+  })
+  .refine((d) => d.password === d.confirm, {
+    message: 'Şifreler eşleşmiyor',
+    path: ['confirm'],
+  });
+
+/**
+ * Oturum açık kullanıcının şifresini günceller.
+ * Google / OAuth hesaplarında Supabase hata döner, bu hata kullanıcıya iletilir.
+ */
+export async function updatePassword(
+  input: { password: string; confirm: string }
+): Promise<ApiResponse<null>> {
+  try {
+    const parsed = passwordSchema.safeParse(input);
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message ?? 'Geçersiz şifre';
+      return { success: false, data: null, error: msg };
+    }
+
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, data: null, error: 'Oturum açılmamış' };
+
+    const { error } = await supabase.auth.updateUser({
+      password: parsed.data.password,
+    });
+
+    if (error) throw error;
+
+    return { success: true, data: null, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Şifre güncellenemedi';
+    // OAuth kullanıcıları için daha anlamlı mesaj
+    const friendly = msg.toLowerCase().includes('provider')
+      ? 'Google ile giriş yapan hesaplarda şifre değiştirilemez.'
+      : msg;
+    return { success: false, data: null, error: friendly };
   }
 }
 

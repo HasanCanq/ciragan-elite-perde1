@@ -141,49 +141,159 @@ export interface CustomerStats {
   recentSignups: number; // Last 30 days
 }
 
+const EMPTY_CUSTOMER_STATS: CustomerStats = {
+  totalCustomers: 0,
+  totalAdmins: 0,
+  totalUsers: 0,
+  recentSignups: 0,
+};
+
 export async function getCustomerStats(): Promise<ApiResponse<CustomerStats>> {
   try {
     const { supabase } = await verifyAdmin();
 
-    // Get total counts
-    const { count: totalCustomers } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
+    // 1. Try RPC (production — single round-trip)
+    try {
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+        'get_customer_overview_stats'
+      );
+      if (!rpcError && rpcData) {
+        return {
+          data: {
+            totalCustomers: rpcData.total_customers ?? 0,
+            totalAdmins:    rpcData.total_admins    ?? 0,
+            totalUsers:     rpcData.total_users     ?? 0,
+            recentSignups:  rpcData.recent_signups  ?? 0,
+          },
+          error: null,
+          success: true,
+        };
+      }
+    } catch { /* RPC not in test DB — fall through */ }
 
-    const { count: totalAdmins } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'ADMIN');
-
-    const { count: totalUsers } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'USER');
-
-    // Get recent signups (last 30 days)
+    // 2. Parallel fallback
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { count: recentSignups } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', thirtyDaysAgo.toISOString());
+    const [
+      { count: totalCustomers },
+      { count: totalAdmins },
+      { count: totalUsers },
+      { count: recentSignups },
+    ] = await Promise.all([
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'ADMIN'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'USER'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo.toISOString()),
+    ]);
 
     return {
       data: {
         totalCustomers: totalCustomers || 0,
-        totalAdmins: totalAdmins || 0,
-        totalUsers: totalUsers || 0,
-        recentSignups: recentSignups || 0,
+        totalAdmins:    totalAdmins    || 0,
+        totalUsers:     totalUsers     || 0,
+        recentSignups:  recentSignups  || 0,
       },
       error: null,
       success: true,
     };
   } catch (error) {
     console.error('getCustomerStats error:', error);
+    // 3. Zero fallback — never crash the dashboard
+    return { data: EMPTY_CUSTOMER_STATS, error: null, success: true };
+  }
+}
+
+// =====================================================
+// CUSTOMER 360 — Tek müşterinin tam profili
+// =====================================================
+
+export interface Customer360 {
+  profile: Profile;
+  // KPI'lar
+  totalOrders: number;
+  totalSpent: number;
+  cancelledOrders: number;
+  cancellationRate: number; // 0–100
+  avgOrderValue: number;
+  // Son 5 sipariş
+  recentOrders: {
+    id: string;
+    order_number: string;
+    status: string;
+    total_amount: number;
+    created_at: string;
+  }[];
+}
+
+export async function getCustomer360(
+  customerId: string
+): Promise<ApiResponse<Customer360>> {
+  try {
+    const { supabase } = await verifyAdmin();
+
+    // 1. Try RPC (production)
+    try {
+      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
+        'get_customer_360',
+        { p_customer_id: customerId }
+      );
+      if (!rpcError && rpcData) {
+        return { data: rpcData as Customer360, error: null, success: true };
+      }
+    } catch { /* RPC not in test DB */ }
+
+    // 2. Parallel fallback
+    const [profileResult, ordersResult] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', customerId).single(),
+      supabase
+        .from('orders')
+        .select('id, order_number, status, total_amount, created_at')
+        .eq('user_id', customerId)
+        .order('created_at', { ascending: false })
+        .limit(100), // enough for accurate KPIs
+    ]);
+
+    if (profileResult.error || !profileResult.data) {
+      return { data: null, error: 'Müşteri bulunamadı', success: false };
+    }
+
+    const orders = (ordersResult.data || []) as {
+      id: string;
+      order_number: string;
+      status: string;
+      total_amount: number;
+      created_at: string;
+    }[];
+
+    const totalOrders     = orders.length;
+    const cancelledOrders = orders.filter((o) => o.status === 'CANCELLED').length;
+    const totalSpent      = orders
+      .filter((o) => !['CANCELLED', 'REFUNDED'].includes(o.status))
+      .reduce((sum, o) => sum + (o.total_amount || 0), 0);
+    const avgOrderValue   = totalOrders > 0 ? totalSpent / totalOrders : 0;
+    const cancellationRate = totalOrders > 0
+      ? Math.round((cancelledOrders / totalOrders) * 100)
+      : 0;
+
+    return {
+      data: {
+        profile: profileResult.data as Profile,
+        totalOrders,
+        totalSpent,
+        cancelledOrders,
+        cancellationRate,
+        avgOrderValue,
+        recentOrders: orders.slice(0, 5),
+      },
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    console.error('getCustomer360 error:', error);
     return {
       data: null,
-      error: error instanceof Error ? error.message : 'İstatistikler yüklenemedi',
+      error: error instanceof Error ? error.message : 'Müşteri verisi yüklenemedi',
       success: false,
     };
   }

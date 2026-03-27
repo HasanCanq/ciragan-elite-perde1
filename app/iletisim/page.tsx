@@ -46,22 +46,22 @@ export default function ContactPage() {
   };
 
   return (
-    <main className="min-h-screen bg-elite-bone">
+    <main className="min-h-screen bg-white">
       {/* Hero Section */}
-      <section className="bg-elite-black py-16 lg:py-24">
-        <div className="elite-container">
+      <section className="bg-black py-16 lg:py-24">
+        <div className="h-container">
           <nav className="flex items-center gap-2 text-sm mb-6">
-            <Link href="/iletisim" className="text-elite-bone/70 hover:text-elite-gold transition-colors">
+            <Link href="/iletisim" className="text-white/70 hover:text-[#B89947] transition-colors">
               Ana Sayfa
             </Link>
-            <ChevronRight className="w-4 h-4 text-elite-bone/50" />
-            <span className="text-elite-gold">İletisim</span>
+            <ChevronRight className="w-4 h-4 text-white/70" />
+            <span className="text-[#B89947]">İletisim</span>
           </nav>
 
-          <h1 className="font-serif text-4xl lg:text-5xl font-semibold text-elite-bone">
+          <h1 className="font-serif text-4xl lg:text-5xl font-semibold text-white">
             İletisim
           </h1>
-          <p className="mt-4 text-elite-bone/80 text-lg max-w-2xl">
+          <p className="mt-4 text-white/70 text-lg max-w-2xl">
             Sorularınız için bize ulaşın. Uzman ekibimiz size yardımcı olmaktan mutluluk duyacaktır.
           </p>
         </div>
@@ -69,22 +69,22 @@ export default function ContactPage() {
 
       {/* Main Content */}
       <section className="py-16 lg:py-24">
-        <div className="elite-container">
+        <div className="h-container">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
             
             {/* Sol Kolon - Bilgiler */}
             <div className="space-y-6">
-              <span className="text-elite-gold font-medium tracking-wider uppercase text-sm">Bize Ulaşın</span>
-              <h2 className="font-serif text-3xl font-semibold text-elite-black mt-3 mb-8">İletisim Bilgileri</h2>
+              <span className="text-[#B89947] font-medium tracking-wider uppercase text-sm">Bize Ulaşın</span>
+              <h2 className="font-serif text-3xl font-semibold text-black mt-3 mb-8">İletisim Bilgileri</h2>
 
               <div className="space-y-6">
                 <div className="flex items-start gap-4 p-5 bg-white rounded-xl shadow-elite">
-                  <div className="w-12 h-12 bg-elite-gold/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-6 h-6 text-elite-gold" />
+                  <div className="w-12 h-12 bg-[#FAFAFA] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-6 h-6 text-[#B89947]" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-lg font-semibold text-elite-black mb-1">Adres</h3>
-                    <p className="text-elite-gray leading-relaxed">
+                    <h3 className="font-serif text-lg font-semibold text-black mb-1">Adres</h3>
+                    <p className="text-[#9CA3AF] leading-relaxed">
                       Atatürk, Estergon Cd. No:3, <br />
                       34000 Ümraniye/İstanbul
                     </p>
@@ -92,23 +92,23 @@ export default function ContactPage() {
                 </div>
 
                 <div className="flex items-start gap-4 p-5 bg-white rounded-xl shadow-elite">
-                  <div className="w-12 h-12 bg-elite-gold/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-6 h-6 text-elite-gold" />
+                  <div className="w-12 h-12 bg-[#FAFAFA] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-6 h-6 text-[#B89947]" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-lg font-semibold text-elite-black mb-1">Telefon</h3>
+                    <h3 className="font-serif text-lg font-semibold text-black mb-1">Telefon</h3>
                   
-                    <p className="text-elite-gray text-sm">0532 295 95 86 (WhatsApp)</p>
+                    <p className="text-[#9CA3AF] text-sm">0532 295 95 86 (WhatsApp)</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-4 p-5 bg-white rounded-xl shadow-elite">
-                  <div className="w-12 h-12 bg-elite-gold/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-6 h-6 text-elite-gold" />
+                  <div className="w-12 h-12 bg-[#FAFAFA] rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-6 h-6 text-[#B89947]" />
                   </div>
                   <div>
-                    <h3 className="font-serif text-lg font-semibold text-elite-black mb-1">Çalışma Saatleri</h3>
-                    <p className="text-elite-gray text-sm">Pazartesi - Cumartesi: 09:00 - 19:00</p>
+                    <h3 className="font-serif text-lg font-semibold text-black mb-1">Çalışma Saatleri</h3>
+                    <p className="text-[#9CA3AF] text-sm">Pazartesi - Cumartesi: 09:00 - 19:00</p>
                   </div>
                 </div>
               </div>
@@ -117,7 +117,7 @@ export default function ContactPage() {
             {/* Sağ Kolon - Harita ve Form */}
             <div className="space-y-8">
               {/* <div>
-                <h3 className="font-serif text-xl font-semibold text-elite-black mb-4">Konumumuz</h3>
+                <h3 className="font-serif text-xl font-semibold text-black mb-4">Konumumuz</h3>
                 <div className="relative aspect-video rounded-2xl overflow-hidden shadow-elite bg-gray-100 border border-gray-200">
                   {showMap ? (
                     <iframe
@@ -131,8 +131,8 @@ export default function ContactPage() {
                       title="Çırağan Elite Perde Ümraniye"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-elite-gray gap-3">
-                      <Loader2 className="w-8 h-8 animate-spin text-elite-gold" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-[#9CA3AF] gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-[#B89947]" />
                       <p className="text-sm">Harita hazırlanıyor...</p>
                     </div>
                   )}
@@ -141,7 +141,7 @@ export default function ContactPage() {
 
               {/* Form Alanı */}
               <div className="bg-white rounded-2xl shadow-elite p-8">
-                <h3 className="font-serif text-xl font-semibold text-elite-black mb-6">Mesaj Gönderin</h3>
+                <h3 className="font-serif text-xl font-semibold text-black mb-6">Mesaj Gönderin</h3>
                 
                 {submitStatus === "success" && (
                   <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm">
@@ -151,44 +151,44 @@ export default function ContactPage() {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9CA3AF]" />
                     <input
                       type="text"
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
                       placeholder="Ad Soyad"
-                      className="elite-input pl-10"
+                      className="h-input pl-10"
                       required
                     />
                   </div>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9CA3AF]" />
                     <input
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
                       placeholder="E-posta"
-                      className="elite-input pl-10"
+                      className="h-input pl-10"
                       required
                     />
                   </div>
                   <div className="relative">
-                    <MessageSquare className="absolute left-3 top-3 w-5 h-5 text-elite-gray" />
+                    <MessageSquare className="absolute left-3 top-3 w-5 h-5 text-[#9CA3AF]" />
                     <textarea
                       name="message"
                       value={formData.message}
                       onChange={handleChange}
                       placeholder="Mesajınız"
-                      className="elite-input pl-10 min-h-[120px] pt-3"
+                      className="h-input pl-10 min-h-[120px] pt-3"
                       required
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full elite-button justify-center"
+                    className="w-full h-btn justify-center"
                   >
                     {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Gönder"}
                   </button>

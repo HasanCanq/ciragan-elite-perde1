@@ -68,12 +68,12 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-elite-black flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-black flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-elite-gold/20 mb-4">
-            <Shield className="w-8 h-8 text-elite-gold" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#FAFAFA] mb-4">
+            <Shield className="w-8 h-8 text-[#B89947]" />
           </div>
           <h1 className="font-serif text-3xl font-semibold text-white">
             Çırağan Elite
@@ -82,17 +82,17 @@ export default function AdminLoginPage() {
         </div>
 
         {/* Auth Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="font-serif text-xl font-semibold text-elite-black text-center mb-2">
+        <div className="bg-white rounded-2xl p-8">
+          <h2 className="font-serif text-xl font-semibold text-black text-center mb-2">
             Admin Girişi
           </h2>
-          <p className="text-elite-gray text-center text-sm mb-8">
+          <p className="text-[#9CA3AF] text-center text-sm mb-8">
             Yönetim paneline erişmek için giriş yapın
           </p>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 text-sm">
               {error}
             </div>
           )}
@@ -100,17 +100,17 @@ export default function AdminLoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-elite-gray mb-2">
+              <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
                 E-posta
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9CA3AF]" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200
+                           focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                            transition-colors outline-none"
                   placeholder="admin@example.com"
                   required
@@ -121,17 +121,17 @@ export default function AdminLoginPage() {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-elite-gray mb-2">
+              <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
                 Şifre
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-elite-gray" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9CA3AF]" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                  className="w-full pl-10 pr-12 py-3 border border-gray-200
+                           focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                            transition-colors outline-none"
                   placeholder="••••••••"
                   required
@@ -141,8 +141,8 @@ export default function AdminLoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-elite-gray
-                           hover:text-elite-black transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]
+                           hover:text-black transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -158,8 +158,8 @@ export default function AdminLoginPage() {
               type="submit"
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 px-6 py-3
-                       bg-elite-black text-white font-medium rounded-lg
-                       hover:bg-elite-black/90 transition-colors
+                       bg-black text-white font-medium
+                       hover:bg-black/90 transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -178,7 +178,7 @@ export default function AdminLoginPage() {
         <div className="text-center mt-6">
           <Link
             href="/"
-            className="text-sm text-gray-400 hover:text-elite-gold transition-colors"
+            className="text-sm text-gray-400 hover:text-[#B89947] transition-colors"
           >
             ← Ana Sayfaya Dön
           </Link>

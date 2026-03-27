@@ -32,7 +32,7 @@ export default function EditProductPage() {
   if (isFetching) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-elite-gold animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#B89947] animate-spin" />
       </div>
     );
   }
@@ -41,7 +41,7 @@ export default function EditProductPage() {
     return (
       <div className="text-center py-12">
         <p className="text-red-600">{error || 'Ürün bulunamadı'}</p>
-        <Link href="/admin/products" className="text-elite-gold hover:underline mt-4 inline-block">
+        <Link href="/admin/products" className="text-[#B89947] hover:underline mt-4 inline-block">
           Ürün listesine dön
         </Link>
       </div>

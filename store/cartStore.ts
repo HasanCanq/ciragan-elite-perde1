@@ -4,27 +4,36 @@ import {
   CartItem,
   CartSummary,
   PileFactor,
-  PILE_COEFFICIENTS_UPPER,
   SHIPPING,
   getCartItemKey,
 } from '@/types';
+import { TOKEN_TTL_MS } from '@/lib/engine/constants';
 
 
 
 interface CartState {
   // State
   items: CartItem[];
-  isOpen: boolean; 
+  isOpen: boolean;
 
-  
-  addToCart: (item: Omit<CartItem, 'areaM2' | 'pileCoefficient' | 'unitPrice'>) => void;
+  // Sepet işlemleri
+  /** Sepete ekle. Gerçek token varsa TTL kontrolü yapar — süresi dolmuşsa false döner. */
+  addToCart: (item: CartItem) => boolean;
   removeFromCart: (itemKey: string) => void;
   updateQuantity: (itemKey: string, quantity: number) => void;
   clearCart: () => void;
   toggleCart: () => void;
   setCartOpen: (isOpen: boolean) => void;
 
-  
+  // Token yönetimi (signer.ts entegrasyonu)
+  /** Ürün yeniden fiyatlandırıldığında tokenı güncelle (engine API çağrısı sonrası). */
+  refreshToken: (itemKey: string, token: string, expiresAt: number) => void;
+  /** Süresi dolmuş gerçek tokenları olan kalemleri sepetten kaldır. */
+  purgeStaleItems: () => void;
+  /** Checkout öncesi kontrol — herhangi bir kalemi süresi dolmuş gerçek token varsa true. */
+  hasStaleTokens: () => boolean;
+
+  // Hesaplama yardımcıları
   getCartSummary: () => CartSummary;
   getCartTotal: () => number;
   getItemCount: () => number;
@@ -33,22 +42,15 @@ interface CartState {
 }
 
 
-/**
- * Alan hesapla (m²)
- */
-function calculateArea(widthCm: number, heightCm: number): number {
-  return (widthCm * heightCm) / 10000;
-}
+// TOKEN_TTL_MS artık @/lib/engine/constants'tan gelir — signer.ts ile senkronize.
 
 /**
- * Birim fiyat hesapla
+ * Token geçerliliğini kontrol eder.
+ * Boş token artık geçerli sayılmaz — motor entegrasyonu tamamlandı.
  */
-function calculateUnitPrice(
-  areaM2: number,
-  pricePerM2: number,
-  pileCoefficient: number
-): number {
-  return Math.round(areaM2 * pricePerM2 * pileCoefficient * 100) / 100;
+function isTokenFresh(token: string, expiresAt: number): boolean {
+  if (!token) return false;
+  return expiresAt > Date.now();
 }
 
 /**
@@ -68,18 +70,13 @@ export const useCartStore = create<CartState>()(
 
       
       addToCart: (item) => {
-        const pileCoefficient = PILE_COEFFICIENTS_UPPER[item.pileFactor];
-        const areaM2 = calculateArea(item.width, item.height);
-        const unitPrice = calculateUnitPrice(areaM2, item.pricePerM2, pileCoefficient);
+        // Gerçek token varsa TTL doğrula — süresi dolmuşsa reddet
+        if (!isTokenFresh(item.priceToken, item.tokenExpiresAt)) {
+          console.warn('[Cart] Süresi dolmuş fiyat tokeni — sepete ekleme reddedildi:', item.productId);
+          return false;
+        }
 
-        const newItem: CartItem = {
-          ...item,
-          areaM2,
-          pileCoefficient,
-          unitPrice,
-        };
-
-        const itemKey = getCartItemKey(newItem);
+        const itemKey = getCartItemKey(item);
 
         set((state) => {
           const existingIndex = state.items.findIndex(
@@ -87,18 +84,21 @@ export const useCartStore = create<CartState>()(
           );
 
           if (existingIndex !== -1) {
-            
             const updatedItems = [...state.items];
             updatedItems[existingIndex] = {
               ...updatedItems[existingIndex],
               quantity: updatedItems[existingIndex].quantity + item.quantity,
+              // Yeni (daha taze) token geldiyse güncelle
+              priceToken:     item.priceToken     || updatedItems[existingIndex].priceToken,
+              tokenExpiresAt: item.tokenExpiresAt || updatedItems[existingIndex].tokenExpiresAt,
             };
             return { items: updatedItems };
           }
 
-         
-          return { items: [...state.items, newItem] };
+          return { items: [...state.items, item] };
         });
+
+        return true;
       },
 
      
@@ -122,12 +122,37 @@ export const useCartStore = create<CartState>()(
         }));
       },
 
-     
       clearCart: () => {
         set({ items: [] });
       },
 
-      
+      refreshToken: (itemKey, token, expiresAt) => {
+        set((state) => ({
+          items: state.items.map((item) =>
+            getCartItemKey(item) === itemKey
+              ? { ...item, priceToken: token, tokenExpiresAt: expiresAt }
+              : item
+          ),
+        }));
+      },
+
+      purgeStaleItems: () => {
+        const now = Date.now();
+        set((state) => ({
+          // Boş token veya süresi dolmuş token — ikisi de çıkarılır
+          items: state.items.filter(
+            (item) => item.priceToken && item.tokenExpiresAt > now
+          ),
+        }));
+      },
+
+      hasStaleTokens: () => {
+        const now = Date.now();
+        return get().items.some(
+          (item) => item.priceToken !== '' && item.tokenExpiresAt <= now
+        );
+      },
+
       toggleCart: () => {
         set((state) => ({ isOpen: !state.isOpen }));
       },
@@ -185,21 +210,38 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: 'ciragan-elite-cart', 
+      name: 'ciragan-elite-cart',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         items: state.items,
       }),
+      // Sayfa yenilenmesinde localStorage'dan gelen süresi dolmuş fiyat tokenlerini temizle
+      onRehydrateStorage: () => (state) => {
+        if (state) state.purgeStaleItems();
+      },
     }
   )
 );
 
 
-export const useCartItems = () => useCartStore((state) => state.items);
-export const useCartIsOpen = () => useCartStore((state) => state.isOpen);
-export const useCartItemCount = () => useCartStore((state) => state.items.length);
-export const useCartTotalItems = () =>
+export const useCartItems        = () => useCartStore((state) => state.items);
+export const useCartIsOpen       = () => useCartStore((state) => state.isOpen);
+export const useCartItemCount    = () => useCartStore((state) => state.items.length);
+export const useCartTotalItems   = () =>
   useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
+
+// Token yönetimi hook'ları (checkout sayfasında kullanılır)
+/** Sepette süresi dolmuş gerçek tokenı olan kalem var mı? */
+export const useHasStaleTokens   = () => useCartStore((state) => state.hasStaleTokens());
+/** Belirli bir kalemin token'ını yenile (engine API çağrısı sonrası). */
+export const useRefreshToken     = () => useCartStore((state) => state.refreshToken);
+/** Süresi dolmuş kalemleri temizle (checkout öncesi kullanılabilir). */
+export const usePurgeStaleItems  = () => useCartStore((state) => state.purgeStaleItems);
+/** Kaç dakika kaldığını döner (TOKEN_TTL_MS'ten türetilir). */
+export function useTokenMinutesLeft(expiresAt: number): number {
+  const remaining = expiresAt - Date.now();
+  return remaining > 0 ? Math.floor(remaining / 60_000) : 0;
+}
 
 
 export function useCartHydration() {

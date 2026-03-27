@@ -13,6 +13,14 @@ import {
   MapPin,
   Loader2,
   CreditCard,
+  BadgeCheck,
+  Factory,
+  PauseCircle,
+  Archive,
+  Navigation,
+  AlertTriangle,
+  RotateCcw,
+  Banknote,
 } from 'lucide-react';
 import { getUserOrders } from '@/lib/actions';
 import { formatPrice } from '@/lib/utils';
@@ -24,14 +32,21 @@ import {
   OrderWithItems,
 } from '@/types';
 
-// Status icon mapping
 const STATUS_ICONS: Record<OrderStatus, React.ElementType> = {
-  PENDING: Clock,
-  PAID: CheckCircle,
-  PROCESSING: Package,
-  SHIPPED: Truck,
-  DELIVERED: CheckCircle,
-  CANCELLED: XCircle,
+  PENDING:          Clock,
+  PAID:             CheckCircle,
+  PROCESSING:       Package,
+  CONFIRMED:        BadgeCheck,
+  IN_PRODUCTION:    Factory,
+  ON_HOLD:          PauseCircle,
+  READY_TO_SHIP:    Archive,
+  SHIPPED:          Truck,
+  IN_TRANSIT:       Navigation,
+  DELIVERY_FAILED:  AlertTriangle,
+  DELIVERED:        CheckCircle,
+  RETURN_REQUESTED: RotateCcw,
+  REFUNDED:         Banknote,
+  CANCELLED:        XCircle,
 };
 
 export default function AccountOrdersPage() {
@@ -71,16 +86,16 @@ export default function AccountOrdersPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-elite-gold animate-spin" />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 text-[#B89947] animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <div className="text-red-500 p-4 bg-red-50 rounded-lg">
+      <div className="border border-red-200 p-6 bg-white">
+        <div className="text-red-500 text-[10px] tracking-[0.1em]">
           Siparişler yüklenemedi: {error}
         </div>
       </div>
@@ -90,28 +105,28 @@ export default function AccountOrdersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h1 className="font-serif text-2xl font-semibold text-elite-black">
+      <div className="border border-[#F3F4F6] p-6 bg-white">
+        <h1 className="font-serif text-black text-xl tracking-[0.05em]">
           Siparişlerim
         </h1>
-        <p className="text-elite-gray mt-1">
+        <p className="text-[#9CA3AF] text-[9px] tracking-[0.15em] mt-2">
           Tüm siparişlerinizi buradan takip edebilirsiniz.
         </p>
       </div>
 
       {/* Orders List */}
       {orders.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-          <Package className="w-16 h-16 text-elite-gray/30 mx-auto mb-4" />
-          <h2 className="font-serif text-xl font-semibold text-elite-black mb-2">
+        <div className="border border-[#F3F4F6] p-16 text-center bg-white">
+          <Package className="w-12 h-12 text-[#B89947]/20 mx-auto mb-4" />
+          <h2 className="font-serif text-black text-lg tracking-[0.05em] mb-2">
             Henüz Sipariş Yok
           </h2>
-          <p className="text-elite-gray mb-6">
+          <p className="text-[#9CA3AF] text-[9px] tracking-[0.15em] mb-8">
             Henüz sipariş vermediniz. Koleksiyonumuzu keşfetmeye ne dersiniz?
           </p>
-          <Link href="/" className="elite-button inline-flex">
+          <Link href="/" className="h-btn inline-flex items-center gap-2">
             Alışverişe Başla
-            <ArrowRight className="w-5 h-5 ml-2" />
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       ) : (
@@ -123,48 +138,48 @@ export default function AccountOrdersPage() {
             return (
               <div
                 key={order.id}
-                className="bg-white rounded-xl shadow-sm overflow-hidden"
+                className="border border-[#F3F4F6] overflow-hidden bg-white"
               >
                 {/* Accordion Header */}
                 <button
                   onClick={() => toggleOrder(order.id)}
-                  className="w-full p-6 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors text-left"
+                  className="w-full p-6 flex items-center justify-between gap-4 hover:bg-[#F3F4F6] transition-colors duration-200 text-left"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="w-12 h-12 bg-elite-gold/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <StatusIcon className="w-6 h-6 text-elite-gold" />
+                    <div className="w-10 h-10 border border-[#F3F4F6] bg-[#FAFAFA] flex items-center justify-center shrink-0">
+                      <StatusIcon className="w-5 h-5 text-[#B89947]/60" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <p className="font-mono text-sm font-medium text-elite-black">
+                        <p className="font-mono text-[10px] tracking-[0.1em] text-black">
                           {order.order_number}
                         </p>
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2 py-0.5 text-[8px] tracking-[0.1em] uppercase font-medium ${
                             ORDER_STATUS_COLORS[order.status as OrderStatus]
                           }`}
                         >
                           {ORDER_STATUS_LABELS[order.status as OrderStatus]}
                         </span>
                       </div>
-                      <p className="text-sm text-elite-gray mt-1">
+                      <p className="text-[9px] text-[#9CA3AF] tracking-[0.05em] mt-1">
                         {new Date(order.created_at).toLocaleDateString('tr-TR', {
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric',
                         })}
-                        <span className="mx-2">•</span>
+                        <span className="mx-2">·</span>
                         {order.items?.length || 0} ürün
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <span className="font-serif text-xl font-bold text-elite-gold">
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="font-serif text-[#B89947] font-bold text-lg">
                       {formatPrice(order.total_amount)}
                     </span>
                     <ChevronDown
-                      className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+                      className={`w-4 h-4 text-[#B89947]/40 transition-transform duration-200 ${
                         isExpanded ? 'rotate-180' : ''
                       }`}
                     />
@@ -177,40 +192,38 @@ export default function AccountOrdersPage() {
                     isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
-                  <div className="px-6 pb-6 border-t border-gray-100">
+                  <div className="px-6 pb-6 border-t border-[#F3F4F6]">
                     {/* Order Items */}
                     <div className="mt-4 space-y-3">
-                      <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                      <h3 className="text-[8px] text-[#9CA3AF] tracking-[0.3em] uppercase">
                         Sipariş Kalemleri
                       </h3>
                       {order.items?.map((item, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center gap-4 p-4 bg-elite-bone/50 rounded-lg"
+                          className="flex items-center gap-4 p-4 border border-[#F3F4F6] bg-[#FAFAFA]"
                         >
-                          <div className="w-14 h-14 bg-gradient-to-br from-elite-gold/20 to-elite-bone rounded-lg flex-shrink-0" />
+                          <div className="w-12 h-12 bg-[#F3F4F6] border border-[#F3F4F6] shrink-0" />
 
                           <div className="flex-1 min-w-0">
                             <Link
                               href={`/urun/${item.product_slug}`}
-                              className="font-medium text-elite-black hover:text-elite-gold transition-colors"
+                              className="text-black text-[10px] tracking-[0.05em] hover:text-[#B89947] transition-colors duration-200"
                             >
                               {item.product_name}
                             </Link>
-                            <div className="mt-1 text-sm text-elite-gray">
-                              <span className="font-medium">
-                                {item.width_cm} x {item.height_cm} cm
-                              </span>
-                              <span className="mx-1.5 text-gray-300">•</span>
+                            <div className="mt-1 text-[9px] text-[#9CA3AF] tracking-[0.05em] space-x-2">
+                              <span>{item.width_cm} x {item.height_cm} cm</span>
+                              <span>·</span>
                               <span>{item.area_m2.toFixed(2)} m²</span>
-                              <span className="mx-1.5 text-gray-300">•</span>
+                              <span>·</span>
                               <span>{PILE_LABELS_UPPER[item.pile_factor]}</span>
                             </div>
                           </div>
 
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm text-elite-gray">x{item.quantity}</p>
-                            <p className="font-semibold text-elite-black">
+                          <div className="text-right shrink-0">
+                            <p className="text-[9px] text-[#9CA3AF]">x{item.quantity}</p>
+                            <p className="text-[10px] text-black font-medium mt-0.5">
                               {formatPrice(item.total_price)}
                             </p>
                           </div>
@@ -219,14 +232,14 @@ export default function AccountOrdersPage() {
                     </div>
 
                     {/* Shipping Address */}
-                    <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="mt-6 p-4 border border-[#F3F4F6] bg-[#FAFAFA]">
                       <div className="flex items-start gap-3">
-                        <MapPin className="w-5 h-5 text-elite-gold flex-shrink-0 mt-0.5" />
+                        <MapPin className="w-4 h-4 text-[#B89947]/60 shrink-0 mt-0.5" />
                         <div>
-                          <h3 className="text-sm font-medium text-gray-700">
+                          <h3 className="text-[8px] text-[#9CA3AF] tracking-[0.2em] uppercase mb-1">
                             Teslimat Adresi
                           </h3>
-                          <p className="text-sm text-gray-600 mt-1">
+                          <p className="text-[10px] text-black tracking-[0.05em]">
                             {order.shipping_address}
                           </p>
                         </div>
@@ -234,23 +247,21 @@ export default function AccountOrdersPage() {
                     </div>
 
                     {/* Order Summary */}
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <div className="flex flex-wrap justify-between gap-4 text-sm">
-                        <div className="space-y-1 text-elite-gray">
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="w-4 h-4" />
-                            <span>
-                              {order.payment_method === 'bank_transfer'
-                                ? 'Havale/EFT'
-                                : order.payment_method === 'cash_on_delivery'
-                                ? 'Kapıda Ödeme'
-                                : 'Kredi Kartı'}
-                            </span>
-                          </div>
-                          {order.shipping_cost > 0 && (
-                            <p>Kargo: {formatPrice(order.shipping_cost)}</p>
-                          )}
+                    <div className="mt-4 pt-4 border-t border-[#F3F4F6]">
+                      <div className="flex flex-wrap justify-between gap-4 text-[9px] text-[#9CA3AF] tracking-[0.05em]">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>
+                            {order.payment_method === 'bank_transfer'
+                              ? 'Havale/EFT'
+                              : order.payment_method === 'cash_on_delivery'
+                              ? 'Kapıda Ödeme'
+                              : 'Kredi Kartı'}
+                          </span>
                         </div>
+                        {order.shipping_cost > 0 && (
+                          <p>Kargo: {formatPrice(order.shipping_cost)}</p>
+                        )}
                       </div>
                     </div>
                   </div>

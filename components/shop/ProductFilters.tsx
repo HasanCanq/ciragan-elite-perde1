@@ -27,16 +27,16 @@ function AccordionSection({ title, defaultOpen = true, children }: AccordionSect
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
+    <div className="border-b border-[#1A1A1A]/20 last:border-b-0">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between py-4 text-left group"
       >
-        <span className="font-serif text-lg font-medium text-elite-black group-hover:text-elite-gold transition-colors">
+        <span className="text-[#4A4A4A] text-[9px] tracking-[0.3em] uppercase group-hover:text-[#B89947] transition-colors duration-300">
           {title}
         </span>
         <ChevronDown
-          className={`w-5 h-5 text-elite-gray transition-transform duration-200 ${
+          className={`w-4 h-4 text-[#B89947]/50 transition-transform duration-200 ${
             isOpen ? 'rotate-180' : ''
           }`}
         />
@@ -65,7 +65,6 @@ export default function ProductFilters({
   const [minPrice, setMinPrice] = useState(currentFilters.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(currentFilters.maxPrice || '');
 
-  // Create query string with updated params
   const createQueryString = useCallback(
     (updates: Record<string, string | null>) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -83,7 +82,6 @@ export default function ProductFilters({
     [searchParams]
   );
 
-  // Apply price filter
   const handlePriceFilter = () => {
     const queryString = createQueryString({
       minPrice: minPrice || null,
@@ -94,7 +92,6 @@ export default function ProductFilters({
     onClose?.();
   };
 
-  // Clear all filters
   const handleClearFilters = () => {
     setMinPrice('');
     setMaxPrice('');
@@ -102,27 +99,25 @@ export default function ProductFilters({
     onClose?.();
   };
 
-  // Check if any filters are active
   const hasActiveFilters = Boolean(
     currentFilters.minPrice ||
     currentFilters.maxPrice ||
     (currentFilters.categoryIds && currentFilters.categoryIds.length > 0)
   );
 
-  // Other categories (excluding current)
   const otherCategories = categories.filter((cat) => cat.id !== currentCategory.id);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
+    <div className="border border-[#1A1A1A]/20 p-6 bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
-        <h2 className="font-serif text-xl font-semibold text-elite-black">Filtreler</h2>
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#1A1A1A]/20">
+        <h2 className="font-['Cinzel',_serif] text-[#1A1A1A] text-[11px] tracking-[0.2em] uppercase">Filtreler</h2>
         {hasActiveFilters && (
           <button
             onClick={handleClearFilters}
-            className="flex items-center gap-1.5 text-sm text-elite-gray hover:text-elite-gold transition-colors"
+            className="flex items-center gap-1.5 text-[#767676] text-[9px] tracking-[0.2em] uppercase hover:text-[#B89947] transition-colors duration-300"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-3 h-3" />
             Temizle
           </button>
         )}
@@ -133,39 +128,34 @@ export default function ProductFilters({
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <label className="block text-xs text-elite-gray mb-1.5">Min (TL/m²)</label>
+              <label className="block text-[8px] text-[#9A9A9A] tracking-[0.2em] uppercase mb-2">Min (TL/m²)</label>
               <input
                 type="number"
                 value={minPrice}
                 onChange={(e) => setMinPrice(e.target.value)}
                 placeholder="0"
                 min="0"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                         transition-colors"
+                className="elite-input text-sm"
               />
             </div>
-            <span className="text-elite-gray mt-5">-</span>
+            <span className="text-[#9A9A9A] mt-5">—</span>
             <div className="flex-1">
-              <label className="block text-xs text-elite-gray mb-1.5">Max (TL/m²)</label>
+              <label className="block text-[8px] text-[#9A9A9A] tracking-[0.2em] uppercase mb-2">Max (TL/m²)</label>
               <input
                 type="number"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
                 placeholder="10000"
                 min="0"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                         transition-colors"
+                className="elite-input text-sm"
               />
             </div>
           </div>
           <button
             onClick={handlePriceFilter}
-            className="w-full py-2.5 bg-elite-black text-white text-sm font-medium rounded-lg
-                     hover:bg-elite-gold transition-colors"
+            className="elite-button w-full"
           >
-            Fiyat Uygula
+            Uygula
           </button>
 
           {/* Quick Price Filters */}
@@ -182,10 +172,10 @@ export default function ProductFilters({
                   setMinPrice(range.min);
                   setMaxPrice(range.max);
                 }}
-                className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                className={`px-3 py-1.5 text-[8px] tracking-[0.2em] uppercase border transition-colors duration-200 ${
                   minPrice === range.min && maxPrice === range.max
-                    ? 'bg-elite-gold text-white border-elite-gold'
-                    : 'bg-white text-elite-gray border-gray-200 hover:border-elite-gold hover:text-elite-gold'
+                    ? 'bg-[#B89947] text-white border-[#B89947]'
+                    : 'bg-transparent text-[#767676] border-[#1A1A1A]/20 hover:border-[#B89947]/60 hover:text-[#B89947]'
                 }`}
               >
                 {range.label} TL
@@ -198,13 +188,13 @@ export default function ProductFilters({
       {/* Categories */}
       {otherCategories.length > 0 && (
         <AccordionSection title="Kategoriler" defaultOpen={false}>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {/* Current Category */}
-            <div className="flex items-center gap-3 px-3 py-2 bg-elite-gold/10 rounded-lg">
-              <div className="w-5 h-5 rounded bg-elite-gold flex items-center justify-center">
-                <Check className="w-3.5 h-3.5 text-white" />
+            <div className="flex items-center gap-3 px-3 py-2 bg-[#B89947]/8">
+              <div className="w-4 h-4 bg-[#B89947] flex items-center justify-center">
+                <Check className="w-2.5 h-2.5 text-white" />
               </div>
-              <span className="text-sm font-medium text-elite-black">
+              <span className="text-[#B89947] text-[9px] tracking-[0.2em] uppercase">
                 {currentCategory.name}
               </span>
             </div>
@@ -214,10 +204,10 @@ export default function ProductFilters({
               <Link
                 key={cat.id}
                 href={`/kategori/${cat.slug}`}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                className="flex items-center gap-3 px-3 py-2 hover:bg-[#B89947]/5 transition-colors duration-200 group"
               >
-                <div className="w-5 h-5 rounded border-2 border-gray-300 group-hover:border-elite-gold transition-colors" />
-                <span className="text-sm text-elite-gray group-hover:text-elite-black transition-colors">
+                <div className="w-4 h-4 border border-[#B89947]/30 group-hover:border-[#B89947]/60 transition-colors duration-200" />
+                <span className="text-[#767676] text-[9px] tracking-[0.2em] uppercase group-hover:text-[#B89947] transition-colors duration-200">
                   {cat.name}
                 </span>
               </Link>
@@ -226,36 +216,25 @@ export default function ProductFilters({
         </AccordionSection>
       )}
 
-      {/* Attributes Placeholder */}
-      <AccordionSection title="Özellikler" defaultOpen={false}>
-        <div className="text-sm text-elite-gray bg-gray-50 rounded-lg p-4 text-center">
-          Yakında eklenecek...
-        </div>
-      </AccordionSection>
-
       {/* Stock Filter */}
       <AccordionSection title="Stok Durumu" defaultOpen={false}>
-        <div className="space-y-2">
-          <label className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer group">
+        <div className="space-y-1">
+          <label className="flex items-center gap-3 px-3 py-2 hover:bg-[#B89947]/5 cursor-pointer group transition-colors duration-200">
             <input
               type="checkbox"
               defaultChecked
-              className="w-5 h-5 rounded border-gray-300 text-elite-gold
-                       focus:ring-elite-gold focus:ring-offset-0 cursor-pointer
-                       accent-elite-gold"
+              className="w-4 h-4 border border-[#B89947]/30 bg-transparent cursor-pointer accent-[#B89947]"
             />
-            <span className="text-sm text-elite-gray group-hover:text-elite-black transition-colors">
+            <span className="text-[#767676] text-[9px] tracking-[0.2em] uppercase group-hover:text-[#B89947] transition-colors duration-200">
               Stokta Olanlar
             </span>
           </label>
-          <label className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer group">
+          <label className="flex items-center gap-3 px-3 py-2 hover:bg-[#B89947]/5 cursor-pointer group transition-colors duration-200">
             <input
               type="checkbox"
-              className="w-5 h-5 rounded border-gray-300 text-elite-gold
-                       focus:ring-elite-gold focus:ring-offset-0 cursor-pointer
-                       accent-elite-gold"
+              className="w-4 h-4 border border-[#B89947]/30 bg-transparent cursor-pointer accent-[#B89947]"
             />
-            <span className="text-sm text-elite-gray group-hover:text-elite-black transition-colors">
+            <span className="text-[#767676] text-[9px] tracking-[0.2em] uppercase group-hover:text-[#B89947] transition-colors duration-200">
               Tükenenler Dahil
             </span>
           </label>

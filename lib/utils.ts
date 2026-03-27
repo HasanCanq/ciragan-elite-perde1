@@ -1,16 +1,3 @@
-import { PILE_COEFFICIENTS, type PriceCalculation } from "@/types";
-
-export function calculatePrice({
-  width,
-  height,
-  pileRatio,
-  m2Price,
-}: PriceCalculation): number {
-  const coefficient = PILE_COEFFICIENTS[pileRatio];
-  const m2 = (width * height) / 10000;
-  return m2 * m2Price * coefficient;
-}
-
 export function formatPrice(price: number): string {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",

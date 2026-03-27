@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   MapPin,
   Plus,
@@ -9,491 +9,684 @@ import {
   Loader2,
   X,
   Phone,
-  User,
+  ChevronDown,
+  Pencil,
+  Building2,
   Home,
-  Building,
+  Briefcase,
+  CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   getAddresses,
-  addAddress,
+  createAddress,
+  updateAddress,
   deleteAddress,
   setDefaultAddress,
-  Address,
-  AddressInsert,
-} from '@/lib/actions/user';
+  type Address,
+  type AddressInput,
+} from '@/lib/actions/addresses';
+import { CITY_NAMES, getDistricts } from '@/lib/data/turkey-cities';
+
+// ── Tipler & sabitler ────────────────────────────────────────────────────────
+
+const TITLE_OPTIONS = ['Ev', 'İş', 'Diğer'] as const;
+
+const emptyForm = (): AddressInput => ({
+  title:         '',
+  first_name:    '',
+  last_name:     '',
+  phone:         '',
+  address_line:  '',
+  neighbourhood: '',
+  district:      '',
+  city:          '',
+  postal_code:   '',
+  billing_type:  'INDIVIDUAL',
+  tax_number:    '',
+  tax_office:    '',
+  company_name:  '',
+  is_default:    false,
+});
+
+function addressToInput(a: Address): AddressInput {
+  return {
+    title:         a.title,
+    first_name:    a.first_name,
+    last_name:     a.last_name,
+    phone:         a.phone,
+    address_line:  a.address_line,
+    neighbourhood: a.neighbourhood ?? '',
+    district:      a.district,
+    city:          a.city,
+    postal_code:   a.postal_code ?? '',
+    billing_type:  a.billing_type,
+    tax_number:    a.tax_number ?? '',
+    tax_office:    a.tax_office ?? '',
+    company_name:  '',
+    is_default:    a.is_default,
+  };
+}
+
+// ── Stil sabitleri ───────────────────────────────────────────────────────────
+
+const inputClass  = 'h-input';
+const selectClass = 'h-input appearance-none cursor-pointer pr-8 bg-white';
+const labelClass  = 'block text-[8px] text-[#9CA3AF] tracking-[0.2em] uppercase mb-2';
+
+// ── Modal bileşeni ───────────────────────────────────────────────────────────
+
+interface ModalProps {
+  mode:     'create' | 'edit';
+  initial:  AddressInput;
+  onClose:  () => void;
+  onSave:   (data: AddressInput, editId?: string) => Promise<void>;
+  editId?:  string;
+  saving:   boolean;
+  error:    string | null;
+}
+
+function AddressModal({ mode, initial, onClose, onSave, editId, saving, error }: ModalProps) {
+  const [form, setForm]               = useState<AddressInput>(initial);
+  const [districts, setDistricts]     = useState<string[]>(() => getDistricts(initial.city ?? ''));
+
+  // İl değişince ilçe listesini güncelle
+  useEffect(() => {
+    const list = getDistricts(form.city ?? '');
+    setDistricts(list);
+    if (form.district && !list.includes(form.district)) {
+      setForm((prev) => ({ ...prev, district: '' }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.city]);
+
+  const set = (field: keyof AddressInput) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setForm((prev) => ({
+        ...prev,
+        [field]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value,
+      }));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(form, editId);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white border border-[#F3F4F6] w-full max-w-xl max-h-[92vh] flex flex-col">
+        {/* Başlık */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#F3F4F6] shrink-0">
+          <h2 className="font-serif text-black text-[13px] tracking-[0.15em] uppercase">
+            {mode === 'create' ? 'Yeni Adres Ekle' : 'Adresi Düzenle'}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center border border-[#F3F4F6] hover:border-[#B89947]/50 hover:text-[#B89947] transition-colors duration-200"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form id="address-modal-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+          {/* Hata */}
+          {error && (
+            <div className="flex items-start gap-3 p-3 border border-red-300 bg-red-50">
+              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-red-600 text-[10px] tracking-[0.1em]">{error}</p>
+            </div>
+          )}
+
+          {/* Başlık seçimi */}
+          <div>
+            <label className={labelClass}>Adres Başlığı *</label>
+            <div className="relative">
+              <select value={form.title} onChange={set('title')} required className={selectClass}>
+                <option value="">Seçiniz</option>
+                {TITLE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Ad / Soyad */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Ad *</label>
+              <input type="text" value={form.first_name} onChange={set('first_name')} required className={inputClass} placeholder="Adınız" />
+            </div>
+            <div>
+              <label className={labelClass}>Soyad</label>
+              <input type="text" value={form.last_name} onChange={set('last_name')} className={inputClass} placeholder="Soyadınız" />
+            </div>
+          </div>
+
+          {/* Telefon */}
+          <div>
+            <label className={labelClass}>Telefon *</label>
+            <input type="tel" value={form.phone} onChange={set('phone')} required className={inputClass} placeholder="05xx xxx xx xx" />
+          </div>
+
+          {/* Bireysel / Kurumsal */}
+          <div>
+            <label className={labelClass}>Fatura Tipi</label>
+            <div className="flex gap-3">
+              {(['INDIVIDUAL', 'CORPORATE'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setForm((prev) => ({ ...prev, billing_type: type }))}
+                  className={`flex-1 py-2.5 text-[9px] tracking-[0.2em] uppercase border transition-colors duration-200 ${
+                    form.billing_type === type
+                      ? 'border-black bg-black text-white'
+                      : 'border-[#E5E7EB] text-[#9CA3AF] hover:border-black hover:text-black'
+                  }`}
+                >
+                  {type === 'INDIVIDUAL' ? 'Bireysel' : 'Kurumsal'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Kurumsal alanlar */}
+          {form.billing_type === 'CORPORATE' && (
+            <div className="space-y-4 p-4 border border-[#F3F4F6] bg-[#FAFAFA]">
+              <p className="text-[#9CA3AF] text-[8px] tracking-[0.15em] uppercase">Kurumsal Bilgiler</p>
+              <div>
+                <label className={labelClass}>Şirket Unvanı *</label>
+                <input type="text" value={form.company_name ?? ''} onChange={set('company_name')} required className={inputClass} placeholder="Şirket Unvanı" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>VKN (10 hane) *</label>
+                  <input type="text" value={form.tax_number ?? ''} onChange={set('tax_number')} required maxLength={10} className={inputClass} placeholder="1234567890" />
+                </div>
+                <div>
+                  <label className={labelClass}>Vergi Dairesi *</label>
+                  <input type="text" value={form.tax_office ?? ''} onChange={set('tax_office')} required className={inputClass} placeholder="Kadıköy VD" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* İl / İlçe */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>İl *</label>
+              <div className="relative">
+                <select value={form.city} onChange={set('city')} required className={selectClass}>
+                  <option value="">İl seçin</option>
+                  {CITY_NAMES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>İlçe *</label>
+              <div className="relative">
+                <select value={form.district} onChange={set('district')} required disabled={!form.city} className={`${selectClass} disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF]`}>
+                  <option value="">{form.city ? 'İlçe seçin' : 'Önce il seçin'}</option>
+                  {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF] pointer-events-none" />
+              </div>
+            </div>
+          </div>
+
+          {/* Mahalle */}
+          <div>
+            <label className={labelClass}>Mahalle</label>
+            <input type="text" value={form.neighbourhood ?? ''} onChange={set('neighbourhood')} className={inputClass} placeholder="Mahalle adı" />
+          </div>
+
+          {/* Açık adres */}
+          <div>
+            <label className={labelClass}>Açık Adres *</label>
+            <textarea value={form.address_line} onChange={set('address_line')} required rows={2} className={`${inputClass} resize-none`} placeholder="Sokak, Bina No, Daire No..." />
+          </div>
+
+          {/* Posta kodu */}
+          <div className="w-1/2">
+            <label className={labelClass}>Posta Kodu</label>
+            <input type="text" value={form.postal_code ?? ''} onChange={set('postal_code')} maxLength={5} className={inputClass} placeholder="34000" />
+          </div>
+
+          {/* Varsayılan */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!form.is_default}
+              onChange={(e) => setForm((prev) => ({ ...prev, is_default: e.target.checked }))}
+              className="w-4 h-4 border border-[#B89947]/30 cursor-pointer accent-[#B89947]"
+            />
+            <span className="text-[#9CA3AF] text-[9px] tracking-[0.2em] uppercase">
+              Varsayılan teslimat adresi olarak kaydet
+            </span>
+          </label>
+        </form>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-[#F3F4F6] shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 h-btn-outline disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            İptal
+          </button>
+          <button
+            type="submit"
+            form="address-modal-form"
+            disabled={saving}
+            className="flex-1 h-btn disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {saving ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Kaydediliyor...</>
+            ) : mode === 'create' ? (
+              <><Plus className="w-4 h-4" /> Ekle</>
+            ) : (
+              <><CheckCircle className="w-4 h-4" /> Kaydet</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Adres kartı bileşeni ─────────────────────────────────────────────────────
+
+interface CardProps {
+  address:        Address;
+  actionLoading:  string | null;
+  deleteConfirm:  string | null;
+  onEdit:         (a: Address) => void;
+  onSetDefault:   (id: string) => void;
+  onDeleteAsk:    (id: string) => void;
+  onDeleteCancel: () => void;
+  onDeleteConfirm:(id: string) => void;
+}
+
+function AddressCard({
+  address, actionLoading, deleteConfirm,
+  onEdit, onSetDefault, onDeleteAsk, onDeleteCancel, onDeleteConfirm,
+}: CardProps) {
+  const isBusy = actionLoading === address.id;
+
+  const TitleIcon =
+    address.title === 'Ev'  ? Home      :
+    address.title === 'İş'  ? Briefcase :
+    Building2;
+
+  return (
+    <div className={`border bg-white flex flex-col transition-colors duration-200 ${
+      address.is_default ? 'border-[#B89947]/50' : 'border-[#F3F4F6]'
+    }`}>
+      {/* Üst şerit */}
+      <div className={`px-5 py-3 flex items-center justify-between border-b ${
+        address.is_default ? 'border-[#B89947]/30 bg-[#FAFAFA]' : 'border-[#F3F4F6] bg-[#FAFAFA]'
+      }`}>
+        <div className="flex items-center gap-2">
+          <TitleIcon className={`w-3.5 h-3.5 ${address.is_default ? 'text-[#B89947]' : 'text-[#9CA3AF]'}`} />
+          <span className={`text-[9px] tracking-[0.2em] uppercase font-medium ${
+            address.is_default ? 'text-[#B89947]' : 'text-black'
+          }`}>
+            {address.title}
+          </span>
+        </div>
+        {address.is_default && (
+          <div className="flex items-center gap-1">
+            <Star className="w-3 h-3 text-[#B89947] fill-[#B89947]" />
+            <span className="text-[7px] tracking-[0.2em] uppercase text-[#B89947]">Varsayılan</span>
+          </div>
+        )}
+        {address.billing_type === 'CORPORATE' && (
+          <span className="text-[7px] tracking-[0.2em] uppercase border border-[#F3F4F6] px-1.5 py-0.5 text-[#9CA3AF]">
+            Kurumsal
+          </span>
+        )}
+      </div>
+
+      {/* İçerik */}
+      <div className="px-5 py-4 flex-1 space-y-2">
+        <p className="text-black text-[10px] tracking-[0.1em]">
+          {address.first_name} {address.last_name}
+        </p>
+        <div className="flex items-center gap-1.5 text-[#9CA3AF]">
+          <Phone className="w-3 h-3 shrink-0" />
+          <span className="text-[9px] tracking-[0.05em]">{address.phone}</span>
+        </div>
+        <div className="flex items-start gap-1.5 text-[#9CA3AF]">
+          <MapPin className="w-3 h-3 shrink-0 mt-0.5" />
+          <span className="text-[9px] tracking-[0.05em] leading-relaxed">
+            {[
+              address.neighbourhood,
+              address.address_line,
+              address.district,
+              address.city,
+              address.postal_code,
+            ].filter(Boolean).join(', ')}
+          </span>
+        </div>
+        {address.tax_number && (
+          <p className="text-[#9CA3AF] text-[8px] tracking-[0.05em]">
+            VKN: {address.tax_number} — {address.tax_office}
+          </p>
+        )}
+      </div>
+
+      {/* Aksiyonlar */}
+      <div className="px-5 py-3 border-t border-[#F3F4F6] flex items-center gap-2">
+        {/* Varsayılan yap */}
+        {!address.is_default && (
+          <button
+            type="button"
+            onClick={() => onSetDefault(address.id)}
+            disabled={isBusy}
+            className="flex items-center gap-1 text-[8px] tracking-[0.15em] uppercase text-[#9CA3AF] hover:text-[#B89947] transition-colors duration-200 disabled:opacity-40"
+          >
+            {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Star className="w-3 h-3" />}
+            Varsayılan Yap
+          </button>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Düzenle */}
+          <button
+            type="button"
+            onClick={() => onEdit(address)}
+            disabled={isBusy}
+            className="flex items-center gap-1 text-[8px] tracking-[0.15em] uppercase text-[#9CA3AF] hover:text-black transition-colors duration-200 disabled:opacity-40 px-2 py-1 border border-[#F3F4F6] hover:border-[#9CA3AF]"
+          >
+            <Pencil className="w-3 h-3" />
+            Düzenle
+          </button>
+
+          {/* Sil — inline onay */}
+          {deleteConfirm === address.id ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onDeleteConfirm(address.id)}
+                disabled={isBusy}
+                className="text-[8px] tracking-[0.15em] uppercase px-2 py-1 border border-red-300 text-red-500 hover:bg-red-50 transition-colors duration-200 disabled:opacity-40"
+              >
+                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Evet, Sil'}
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteCancel}
+                disabled={isBusy}
+                className="text-[8px] tracking-[0.15em] uppercase px-2 py-1 border border-[#F3F4F6] text-[#9CA3AF] hover:border-[#9CA3AF] transition-colors duration-200"
+              >
+                İptal
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onDeleteAsk(address.id)}
+              disabled={isBusy}
+              className="flex items-center gap-1 text-[8px] tracking-[0.15em] uppercase text-red-400/80 hover:text-red-500 transition-colors duration-200 disabled:opacity-40 px-2 py-1 border border-red-200/60 hover:border-red-300"
+            >
+              <Trash2 className="w-3 h-3" />
+              Sil
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Ana sayfa bileşeni ────────────────────────────────────────────────────────
 
 export default function AccountAddressesPage() {
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [addresses, setAddresses]     = useState<Address[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
+  const [pageError, setPageError]     = useState<string | null>(null);
+
+  // Modal
+  const [modalMode, setModalMode]     = useState<'create' | 'edit'>('create');
+  const [showModal, setShowModal]     = useState(false);
+  const [editId, setEditId]           = useState<string | undefined>();
+  const [modalInitial, setModalInitial] = useState<AddressInput>(emptyForm());
+  const [modalSaving, setModalSaving] = useState(false);
+  const [modalError, setModalError]   = useState<string | null>(null);
+
+  // Kart aksiyonları
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Form state
-  const [formData, setFormData] = useState<AddressInsert>({
-    title: '',
-    full_name: '',
-    phone: '',
-    address_line: '',
-    city: '',
-    district: '',
-    postal_code: '',
-    is_default: false,
-  });
+  // Toast
+  const [toast, setToast]             = useState<{ msg: string; type: 'ok' | 'err' } | null>(null);
 
-  useEffect(() => {
-    loadAddresses();
+  const showToast = useCallback((msg: string, type: 'ok' | 'err') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  async function loadAddresses() {
-    setIsLoading(true);
-    const result = await getAddresses();
+  // ── Yükle ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const result = await getAddresses();
+      if (result.success && result.data) {
+        setAddresses(result.data);
+      } else {
+        setPageError(result.error ?? 'Adresler yüklenemedi');
+      }
+      setIsLoading(false);
+    })();
+  }, []);
 
-    if (result.success && result.data) {
-      setAddresses(result.data);
-    } else {
-      setError(result.error || 'Adresler yüklenemedi');
-    }
-
-    setIsLoading(false);
-  }
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+  // ── Modal işlemleri ───────────────────────────────────────────────────
+  const openCreate = () => {
+    setModalMode('create');
+    setModalInitial(emptyForm());
+    setEditId(undefined);
+    setModalError(null);
+    setShowModal(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
+  const openEdit = (addr: Address) => {
+    setModalMode('edit');
+    setModalInitial(addressToInput(addr));
+    setEditId(addr.id);
+    setModalError(null);
+    setShowModal(true);
+  };
 
-    const result = await addAddress(formData);
+  const closeModal = () => {
+    if (modalSaving) return;
+    setShowModal(false);
+  };
+
+  const handleSave = async (data: AddressInput, id?: string) => {
+    setModalSaving(true);
+    setModalError(null);
+
+    const result = id
+      ? await updateAddress(id, data)
+      : await createAddress(data);
 
     if (result.success && result.data) {
-      setAddresses((prev) => [result.data!, ...prev]);
+      if (id) {
+        setAddresses((prev) => {
+          const next = prev.map((a) => {
+            if (a.id === id) return result.data!;
+            // is_default değişmişse diğerlerini false yap
+            if (result.data!.is_default) return { ...a, is_default: false };
+            return a;
+          });
+          return next;
+        });
+      } else {
+        setAddresses((prev) => {
+          const next = data.is_default
+            ? prev.map((a) => ({ ...a, is_default: false }))
+            : [...prev];
+          return [result.data!, ...next];
+        });
+      }
       setShowModal(false);
-      resetForm();
+      showToast(id ? 'Adres güncellendi.' : 'Yeni adres eklendi.', 'ok');
     } else {
-      setError(result.error || 'Adres eklenemedi');
+      setModalError(result.error ?? 'İşlem başarısız');
     }
 
-    setIsSubmitting(false);
+    setModalSaving(false);
   };
 
-  const handleDelete = async (addressId: string) => {
-    setActionLoading(addressId);
-    const result = await deleteAddress(addressId);
-
+  // ── Varsayılan yap ────────────────────────────────────────────────────
+  const handleSetDefault = async (id: string) => {
+    setActionLoading(id);
+    const result = await setDefaultAddress(id);
     if (result.success) {
-      setAddresses((prev) => prev.filter((a) => a.id !== addressId));
+      setAddresses((prev) => prev.map((a) => ({ ...a, is_default: a.id === id })));
+      showToast('Varsayılan adres güncellendi.', 'ok');
+    } else {
+      showToast(result.error ?? 'İşlem başarısız', 'err');
+    }
+    setActionLoading(null);
+  };
+
+  // ── Sil ──────────────────────────────────────────────────────────────
+  const handleDeleteConfirm = async (id: string) => {
+    setActionLoading(id);
+    const result = await deleteAddress(id);
+    if (result.success) {
+      setAddresses((prev) => prev.filter((a) => a.id !== id));
       setDeleteConfirm(null);
+      showToast('Adres silindi.', 'ok');
     } else {
-      alert(result.error || 'Adres silinemedi');
+      showToast(result.error ?? 'Adres silinemedi', 'err');
     }
-
     setActionLoading(null);
   };
 
-  const handleSetDefault = async (addressId: string) => {
-    setActionLoading(addressId);
-    const result = await setDefaultAddress(addressId);
-
-    if (result.success) {
-      setAddresses((prev) =>
-        prev.map((a) => ({
-          ...a,
-          is_default: a.id === addressId,
-        }))
-      );
-    } else {
-      alert(result.error || 'Varsayılan adres ayarlanamadı');
-    }
-
-    setActionLoading(null);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      full_name: '',
-      phone: '',
-      address_line: '',
-      city: '',
-      district: '',
-      postal_code: '',
-      is_default: false,
-    });
-  };
-
+  // ── Render ────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-elite-gold animate-spin" />
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-6 h-6 text-[#B89947] animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm p-6 flex items-center justify-between">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-6 right-6 z-[60] flex items-center gap-3 px-5 py-3 border shadow-lg transition-all duration-300 ${
+          toast.type === 'ok'
+            ? 'border-[#B89947]/40 bg-[#FAFAFA] text-[#B89947]'
+            : 'border-red-300 bg-red-50 text-red-600'
+        }`}>
+          {toast.type === 'ok'
+            ? <CheckCircle className="w-4 h-4 shrink-0" />
+            : <AlertTriangle className="w-4 h-4 shrink-0" />
+          }
+          <span className="text-[9px] tracking-[0.2em] uppercase">{toast.msg}</span>
+        </div>
+      )}
+
+      {/* Başlık */}
+      <div className="border border-[#F3F4F6] p-6 bg-white flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-elite-black">
+          <h1 className="font-serif text-black text-xl tracking-[0.05em]">
             Adreslerim
           </h1>
-          <p className="text-elite-gray mt-1">
-            Kayıtlı adreslerinizi yönetin.
+          <p className="text-[#9CA3AF] text-[9px] tracking-[0.15em] mt-2">
+            Kayıtlı teslimat ve fatura adreslerinizi yönetin.
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-elite-gold text-white rounded-lg
-                   hover:bg-elite-gold/90 transition-colors font-medium"
+          type="button"
+          onClick={openCreate}
+          className="h-btn shrink-0 flex items-center gap-2"
         >
-          <Plus className="w-5 h-5" />
-          Yeni Adres Ekle
+          <Plus className="w-3.5 h-3.5" />
+          Yeni Adres
         </button>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
-          {error}
+      {/* Sayfa hatası */}
+      {pageError && (
+        <div className="flex items-center gap-3 border border-red-300 bg-red-50 p-4">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-red-600 text-[10px] tracking-[0.1em]">{pageError}</p>
         </div>
       )}
 
-      {/* Addresses List */}
-      {addresses.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-          <MapPin className="w-16 h-16 text-elite-gray/30 mx-auto mb-4" />
-          <h2 className="font-serif text-xl font-semibold text-elite-black mb-2">
-            Henüz Adres Yok
+      {/* Boş durum */}
+      {addresses.length === 0 && !pageError && (
+        <div className="border border-[#F3F4F6] bg-white py-16 text-center">
+          <MapPin className="w-10 h-10 text-black/10 mx-auto mb-5" />
+          <h2 className="font-serif text-black text-[13px] tracking-[0.1em] mb-3">
+            Kayıtlı Adres Yok
           </h2>
-          <p className="text-elite-gray mb-6">
-            Siparişlerinizde kullanmak için adres ekleyin.
+          <p className="text-[#9CA3AF] text-[9px] tracking-[0.15em] mb-8">
+            Siparişlerinizde hızlı kullanmak için adres ekleyin.
           </p>
           <button
-            onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-elite-gold text-white rounded-lg
-                     hover:bg-elite-gold/90 transition-colors font-medium"
+            type="button"
+            onClick={openCreate}
+            className="h-btn inline-flex items-center gap-2"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-3.5 h-3.5" />
             İlk Adresinizi Ekleyin
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Adres kartları */}
+      {addresses.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {addresses.map((address) => (
-            <div
-              key={address.id}
-              className={`bg-white rounded-xl shadow-sm p-6 relative ${
-                address.is_default ? 'ring-2 ring-elite-gold' : ''
-              }`}
-            >
-              {/* Default Badge */}
-              {address.is_default && (
-                <div className="absolute top-4 right-4">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-elite-gold/10 text-elite-gold text-xs font-medium rounded-full">
-                    <Star className="w-3 h-3 fill-current" />
-                    Varsayılan
-                  </span>
-                </div>
-              )}
-
-              {/* Address Title */}
-              <div className="flex items-center gap-2 mb-3">
-                {address.title.toLowerCase().includes('ev') ? (
-                  <Home className="w-5 h-5 text-elite-gold" />
-                ) : (
-                  <Building className="w-5 h-5 text-elite-gold" />
-                )}
-                <h3 className="font-semibold text-elite-black">{address.title}</h3>
-              </div>
-
-              {/* Address Details */}
-              <div className="space-y-2 text-sm text-elite-gray mb-4">
-                <p className="flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  {address.full_name}
-                </p>
-                <p className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  {address.phone}
-                </p>
-                <p className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <span>
-                    {address.address_line}, {address.district}/{address.city}
-                    {address.postal_code && ` - ${address.postal_code}`}
-                  </span>
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
-                {!address.is_default && (
-                  <button
-                    onClick={() => handleSetDefault(address.id)}
-                    disabled={actionLoading === address.id}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-elite-gold
-                             hover:bg-elite-gold/10 rounded-lg transition-colors"
-                  >
-                    {actionLoading === address.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Star className="w-4 h-4" />
-                    )}
-                    Varsayılan Yap
-                  </button>
-                )}
-
-                {deleteConfirm === address.id ? (
-                  <div className="flex items-center gap-2 ml-auto">
-                    <button
-                      onClick={() => handleDelete(address.id)}
-                      disabled={actionLoading === address.id}
-                      className="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg
-                               hover:bg-red-600 transition-colors"
-                    >
-                      {actionLoading === address.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        'Sil'
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="px-3 py-1.5 text-sm bg-gray-200 text-gray-600 rounded-lg
-                               hover:bg-gray-300 transition-colors"
-                    >
-                      İptal
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setDeleteConfirm(address.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600
-                             hover:bg-red-50 rounded-lg transition-colors ml-auto"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Sil
-                  </button>
-                )}
-              </div>
-            </div>
+          {addresses.map((addr) => (
+            <AddressCard
+              key={addr.id}
+              address={addr}
+              actionLoading={actionLoading}
+              deleteConfirm={deleteConfirm}
+              onEdit={openEdit}
+              onSetDefault={handleSetDefault}
+              onDeleteAsk={(id) => setDeleteConfirm(id)}
+              onDeleteCancel={() => setDeleteConfirm(null)}
+              onDeleteConfirm={handleDeleteConfirm}
+            />
           ))}
+
+          {/* Yeni adres ekleme kartı */}
+          <button
+            type="button"
+            onClick={openCreate}
+            className="border border-dashed border-[#F3F4F6] hover:border-[#B89947]/50 bg-white flex flex-col items-center justify-center gap-3 py-10 transition-colors duration-200 group min-h-[180px]"
+          >
+            <div className="w-8 h-8 border border-[#F3F4F6] group-hover:border-[#B89947]/50 flex items-center justify-center transition-colors duration-200">
+              <Plus className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#B89947] transition-colors duration-200" />
+            </div>
+            <span className="text-[8px] tracking-[0.25em] uppercase text-[#9CA3AF] group-hover:text-[#B89947] transition-colors duration-200">
+              Yeni Adres Ekle
+            </span>
+          </button>
         </div>
       )}
 
-      {/* Add Address Modal */}
+      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h2 className="font-serif text-xl font-semibold text-elite-black">
-                Yeni Adres Ekle
-              </h2>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Adres Başlığı *
-                </label>
-                <select
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none"
-                >
-                  <option value="">Seçiniz</option>
-                  <option value="Ev">Ev</option>
-                  <option value="İş">İş</option>
-                  <option value="Diğer">Diğer</option>
-                </select>
-              </div>
-
-              {/* Full Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Alıcı Adı Soyadı *
-                </label>
-                <input
-                  type="text"
-                  name="full_name"
-                  value={formData.full_name}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none"
-                  placeholder="Ad Soyad"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Telefon Numarası *
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none"
-                  placeholder="0555 555 55 55"
-                />
-              </div>
-
-              {/* City & District */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    İl *
-                  </label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="İstanbul"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    İlçe *
-                  </label>
-                  <input
-                    type="text"
-                    name="district"
-                    value={formData.district}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                             transition-colors outline-none"
-                    placeholder="Kadıköy"
-                  />
-                </div>
-              </div>
-
-              {/* Address Line */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Açık Adres *
-                </label>
-                <textarea
-                  name="address_line"
-                  value={formData.address_line}
-                  onChange={handleInputChange}
-                  required
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none resize-none"
-                  placeholder="Mahalle, Sokak, Bina No, Daire No"
-                />
-              </div>
-
-              {/* Postal Code */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Posta Kodu
-                </label>
-                <input
-                  type="text"
-                  name="postal_code"
-                  value={formData.postal_code}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                           focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
-                           transition-colors outline-none"
-                  placeholder="34000"
-                />
-              </div>
-
-              {/* Default Checkbox */}
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="is_default"
-                  checked={formData.is_default}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-elite-gold border-gray-300 rounded focus:ring-elite-gold"
-                />
-                <span className="text-sm text-gray-700">
-                  Varsayılan adres olarak kaydet
-                </span>
-              </label>
-
-              {/* Submit */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  İptal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2 px-6 py-2 bg-elite-gold text-white rounded-lg
-                           hover:bg-elite-gold/90 transition-colors font-medium
-                           disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Kaydediliyor...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-5 h-5" />
-                      Adres Ekle
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AddressModal
+          mode={modalMode}
+          initial={modalInitial}
+          editId={editId}
+          onClose={closeModal}
+          onSave={handleSave}
+          saving={modalSaving}
+          error={modalError}
+        />
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { User, MapPin, Package, LogOut, ChevronRight } from 'lucide-react';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const navItems = [
   { href: '/account', label: 'Kişisel Bilgilerim', icon: User },
@@ -45,40 +45,40 @@ export default async function AccountLayout({
   const { user, profile } = userData;
 
   return (
-    <div className="bg-elite-bone min-h-screen">
+    <div className="bg-white min-h-screen">
       {/* Breadcrumb */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="elite-container py-4">
-          <nav className="flex items-center gap-2 text-sm">
+      <div className="border-b border-[#F3F4F6]">
+        <div className="h-container py-4">
+          <nav className="flex items-center gap-2">
             <Link
               href="/"
-              className="text-elite-gray hover:text-elite-gold transition-colors"
+              className="text-[#9CA3AF] text-[9px] tracking-[0.3em] uppercase hover:text-[#B89947] transition-colors duration-300"
             >
               Ana Sayfa
             </Link>
-            <ChevronRight className="w-4 h-4 text-elite-gray" />
-            <span className="text-elite-black font-medium">Hesabım</span>
+            <ChevronRight className="w-3 h-3 text-[#B89947]/40" />
+            <span className="text-[#B89947]/70 text-[9px] tracking-[0.3em] uppercase">Hesabım</span>
           </nav>
         </div>
       </div>
 
-      <div className="elite-container py-8 lg:py-12">
+      <div className="h-container py-8 lg:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden sticky top-24">
+            <div className="border border-[#F3F4F6] overflow-hidden sticky top-24 bg-white">
               {/* User Info */}
-              <div className="p-6 bg-gradient-to-r from-elite-gold/10 to-elite-bone border-b border-gray-100">
+              <div className="p-6 bg-[#FAFAFA] border-b border-[#F3F4F6]">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-elite-gold flex items-center justify-center text-white text-xl font-bold">
+                  <div className="w-12 h-12 border border-[#B89947]/40 bg-[#B89947] flex items-center justify-center text-white font-serif text-lg">
                     {profile?.full_name?.[0]?.toUpperCase() ||
                       user.email?.[0]?.toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-elite-black truncate">
+                    <p className="font-serif text-black text-[11px] tracking-[0.1em] truncate">
                       {profile?.full_name || 'Kullanıcı'}
                     </p>
-                    <p className="text-sm text-elite-gray truncate">{user.email}</p>
+                    <p className="text-[9px] text-[#9CA3AF] tracking-[0.05em] truncate mt-0.5">{user.email}</p>
                   </div>
                 </div>
               </div>
@@ -90,11 +90,11 @@ export default async function AccountLayout({
                     <li key={item.href}>
                       <Link
                         href={item.href}
-                        className="flex items-center gap-3 px-4 py-3 rounded-lg text-elite-gray
-                                 hover:bg-elite-bone hover:text-elite-gold transition-colors group"
+                        className="flex items-center gap-3 px-4 py-3 text-[#9CA3AF] text-[9px] tracking-[0.2em] uppercase
+                                 hover:bg-[#F3F4F6] hover:text-[#B89947] transition-colors duration-200 group"
                       >
-                        <item.icon className="w-5 h-5 group-hover:text-elite-gold transition-colors" />
-                        <span className="font-medium">{item.label}</span>
+                        <item.icon className="w-4 h-4 group-hover:text-[#B89947] transition-colors shrink-0" />
+                        <span>{item.label}</span>
                       </Link>
                     </li>
                   ))}
@@ -102,15 +102,15 @@ export default async function AccountLayout({
               </nav>
 
               {/* Sign Out */}
-              <div className="p-4 border-t border-gray-100">
+              <div className="p-4 border-t border-[#F3F4F6]">
                 <form action="/auth/signout" method="post">
                   <button
                     type="submit"
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600
-                             hover:bg-red-50 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-red-400/80 text-[9px] tracking-[0.2em] uppercase
+                             hover:bg-red-50 hover:text-red-500 transition-colors duration-200"
                   >
-                    <LogOut className="w-5 h-5" />
-                    <span className="font-medium">Çıkış Yap</span>
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span>Çıkış Yap</span>
                   </button>
                 </form>
               </div>

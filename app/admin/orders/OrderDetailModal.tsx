@@ -16,8 +16,8 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="p-2 text-gray-400 hover:text-elite-gold hover:bg-elite-gold/10
-                 rounded-lg transition-colors"
+        className="p-2 text-gray-400 hover:text-[#B89947] hover:bg-[#FAFAFA]
+                 transition-colors"
         title="Detay"
       >
         <Eye className="w-4 h-4" />
@@ -32,11 +32,11 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
           />
 
           {/* Modal */}
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4">
+          <div className="relative bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4">
             {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-100 p-6 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-elite-black">
+                <h2 className="text-xl font-bold text-black">
                   Sipariş Detayı
                 </h2>
                 <p className="text-sm text-gray-500 mt-1 font-mono">
@@ -45,7 +45,7 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 hover:bg-gray-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -56,7 +56,7 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
               {/* Status & Date */}
               <div className="flex items-center justify-between">
                 <span
-                  className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
+                  className={`inline-flex items-center px-3 py-1.5 text-sm font-medium ${
                     ORDER_STATUS_COLORS[order.status as OrderStatus]
                   }`}
                 >
@@ -75,8 +75,8 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
 
               {/* Customer Info */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h3 className="font-semibold text-elite-black flex items-center gap-2">
-                  <Package className="w-4 h-4 text-elite-gold" />
+                <h3 className="font-semibold text-black flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#B89947]" />
                   Müşteri Bilgileri
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -103,8 +103,8 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
 
               {/* Shipping Address */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h3 className="font-semibold text-elite-black flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-elite-gold" />
+                <h3 className="font-semibold text-black flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-[#B89947]" />
                   Teslimat Adresi
                 </h3>
                 <p className="text-gray-700 flex items-start gap-2">
@@ -115,7 +115,7 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
 
               {/* Order Items */}
               <div>
-                <h3 className="font-semibold text-elite-black mb-4">
+                <h3 className="font-semibold text-black mb-4">
                   Sipariş Kalemleri
                 </h3>
                 <div className="space-y-4">
@@ -125,11 +125,11 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
                       className="border border-gray-100 rounded-xl p-4 flex gap-4"
                     >
                       {/* Product Image Placeholder */}
-                      <div className="w-20 h-20 bg-gradient-to-br from-elite-gold/20 to-elite-bone rounded-lg flex-shrink-0" />
+                      <div className="w-20 h-20 bg-gradient-to-br bg-[#FAFAFA] flex-shrink-0" />
 
                       {/* Product Details */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-elite-black">
+                        <h4 className="font-medium text-black">
                           {item.product_name}
                         </h4>
                         <div className="mt-1 text-sm text-gray-500 space-y-1">
@@ -154,7 +154,7 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
                         <p className="text-sm text-gray-500">
                           x{item.quantity}
                         </p>
-                        <p className="font-semibold text-elite-black mt-1">
+                        <p className="font-semibold text-black mt-1">
                           {formatPrice(item.total_price)}
                         </p>
                       </div>
@@ -185,7 +185,7 @@ export function OrderDetailModal({ order }: OrderDetailModalProps) {
                 )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-100">
                   <span>Toplam</span>
-                  <span className="text-elite-gold">
+                  <span className="text-[#B89947]">
                     {formatPrice(order.total_amount)}
                   </span>
                 </div>

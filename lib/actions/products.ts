@@ -13,6 +13,7 @@ import {
     ApiResponse,
     PaginatedResponse,
 } from '@/types';
+import { auditLog, diffObjects } from '@/lib/services/audit-logger';
 
 // =====================================================
 // 1. GÜVENLİK VE YARDIMCI FONKSİYONLAR
@@ -25,9 +26,21 @@ async function verifyAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Oturum açılmamış.');
 
-    // Rol kontrolü (metadata veya profiles tablosundan)
-    // Not: Eğer user_metadata içinde role tutuyorsan oradan da bakabilirsin
-    // Şimdilik sadece user var mı diye bakıyoruz, gerekirse burayı güçlendiririz.
+    // Profiles tablosundan rol kontrolü — sadece ADMIN rolü geçer
+    const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if (profileError || !profile) {
+        throw new Error('Kullanıcı profili bulunamadı.');
+    }
+
+    if (profile.role !== 'ADMIN') {
+        throw new Error('Bu işlem için yetkiniz yok.');
+    }
+
     return { supabase, user };
 }
 
@@ -63,20 +76,19 @@ function extractStoragePath(url: string): string | null {
 // 2. VERİ ÇEKME İŞLEMLERİ (GET)
 // =====================================================
 
-// Tüm ürünleri getir (Sayfalı)
+// Tüm ürünleri getir (Sayfalı) — soft-deleted olanlar hariç
 export async function getProducts(
     page = 1,
     pageSize = 20,
-    search?: string
+    search?: string,
+    includeDeleted = false  // Admin "çöp kutusu" görünümü için
 ): Promise<ApiResponse<PaginatedResponse<ProductWithCategory>>> {
     try {
         const { supabase } = await verifyAdmin();
 
         let countQuery = supabase.from('products').select('*', { count: 'exact', head: true });
-
-        if (search) {
-            countQuery = countQuery.ilike('name', `%${search}%`);
-        }
+        if (!includeDeleted) countQuery = countQuery.is('deleted_at', null);
+        if (search) countQuery = countQuery.ilike('name', `%${search}%`);
 
         const { count, error: countError } = await countQuery;
         if (countError) throw countError;
@@ -88,9 +100,8 @@ export async function getProducts(
             .order('created_at', { ascending: false })
             .range(offset, offset + pageSize - 1);
 
-        if (search) {
-            query = query.ilike('name', `%${search}%`);
-        }
+        if (!includeDeleted) query = query.is('deleted_at', null);
+        if (search) query = query.ilike('name', `%${search}%`);
 
         const { data, error } = await query;
         if (error) throw error;
@@ -143,6 +154,22 @@ export async function getCategories(): Promise<ApiResponse<Category[]>> {
     }
 }
 
+// Perde modellerini getir (Selectbox için)
+export async function getCurtainModels(): Promise<ApiResponse<{ id: string; name: string; slug: string }[]>> {
+    try {
+        const { supabase } = await verifyAdmin();
+        const { data, error } = await supabase
+            .from('curtain_models')
+            .select('id, name, slug')
+            .eq('is_active', true)
+            .order('display_order');
+        if (error) throw error;
+        return { success: true, data: data ?? [], error: null };
+    } catch (error) {
+        return { success: false, data: null, error: 'Perde modelleri alınamadı' };
+    }
+}
+
 // =====================================================
 // 3. YAZMA İŞLEMLERİ (CREATE / UPDATE / DELETE)
 // =====================================================
@@ -178,6 +205,9 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
         const description = formData.get('description') as string;
         const isPublished = formData.get('is_published') === 'true';
         const inStock = formData.get('in_stock') === 'true';
+        const stockQuantity = parseFloat(formData.get('stock_quantity') as string || '0');
+        const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
+        const modelId = (formData.get('model_id') as string) || null;
 
         // 2. Slug oluştur ve kontrol et
         let slug = generateSlug(name);
@@ -206,7 +236,10 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
                 description,
                 images,
                 is_published: isPublished,
-                in_stock: inStock
+                in_stock: inStock,
+                stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
+                low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
+                ...(modelId ? { model_id: modelId } : {}),
             })
             .select()
             .single();
@@ -214,6 +247,13 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
         if (error) throw error;
 
         revalidatePath('/admin/products');
+        // Yeni ürün → tüm listeleme sayfalarını geçersiz kıl
+        revalidatePath('/');
+        revalidatePath('/kategori/tum-urunler');
+        revalidatePath('/kategori', 'layout'); // tüm /kategori/* alt sayfaları
+        revalidatePath('/urunler');            // asistan PLP cache'i temizle
+        revalidatePath('/asistan');            // asistan ana sayfası
+
         return { success: true, data: product as Product, error: null };
 
     } catch (error) {
@@ -234,9 +274,16 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
         const description = formData.get('description') as string;
         const isPublished = formData.get('is_published') === 'true';
         const inStock = formData.get('in_stock') === 'true';
+        const stockQuantity = parseFloat(formData.get('stock_quantity') as string || '0');
+        const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
+        const modelId = (formData.get('model_id') as string) || null;
 
-        // Mevcut ürünü al
-        const { data: currentProduct } = await supabase.from('products').select('images').eq('id', id).single();
+        // Mevcut ürünü al (images + slug + audit diff için)
+        const { data: currentProduct } = await supabase
+            .from('products')
+            .select('images, slug, name, base_price, is_published, in_stock, category_id')
+            .eq('id', id)
+            .single();
         const oldImages = currentProduct?.images || [];
 
         // Korunan mevcut URL'leri al (JSON string olarak gönderilir)
@@ -278,6 +325,9 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
                 images,
                 is_published: isPublished,
                 in_stock: inStock,
+                stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
+                low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
+                ...(modelId ? { model_id: modelId } : {}),
                 updated_at: new Date().toISOString()
             })
             .eq('id', id)
@@ -286,7 +336,45 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
 
         if (error) throw error;
 
+        // Audit log — fiyat değişimi, yayım durumu vb. (fire-and-forget)
+        if (currentProduct) {
+            const newSnapshot = {
+                name,
+                base_price: price,
+                is_published: isPublished,
+                in_stock: inStock,
+                category_id: categoryId || null,
+            };
+            const oldSnapshot = {
+                name: currentProduct.name,
+                base_price: currentProduct.base_price,
+                is_published: currentProduct.is_published,
+                in_stock: currentProduct.in_stock,
+                category_id: currentProduct.category_id,
+            };
+            const { oldDiff, newDiff } = diffObjects(
+                oldSnapshot as Record<string, unknown>,
+                newSnapshot as Record<string, unknown>
+            );
+            if (Object.keys(oldDiff).length > 0) {
+                auditLog(supabase, {
+                    action: 'UPDATE',
+                    tableName: 'products',
+                    recordId: id,
+                    oldValues: oldDiff,
+                    newValues: newDiff,
+                });
+            }
+        }
+
         revalidatePath('/admin/products');
+        if (currentProduct?.slug) revalidatePath(`/urun/${currentProduct.slug}`);
+        revalidatePath('/');
+        revalidatePath('/kategori/tum-urunler');
+        revalidatePath('/kategori', 'layout');
+        revalidatePath('/urunler');
+        revalidatePath('/asistan');
+
         return { success: true, data: updatedProduct as Product, error: null };
 
     } catch (error) {
@@ -295,28 +383,56 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
     }
 }
 
-// ÜRÜN SİL
+// ÜRÜN SOFT DELETE — fiziksel silme YOK
 export async function deleteProduct(id: string): Promise<ApiResponse<null>> {
     try {
         const { supabase } = await verifyAdmin();
 
-        // Önce resimleri temizle (hata olursa ürün silmeyi engellemesin)
-        const { data: product } = await supabase.from('products').select('images').eq('id', id).single();
+        // Mevcut ürünü al (audit log + slug için)
+        const { data: product } = await supabase
+            .from('products')
+            .select('images, slug, name, base_price, is_published')
+            .eq('id', id)
+            .is('deleted_at', null)  // zaten silinmişse işlem yapma
+            .single();
 
-        if (product?.images && product.images.length > 0) {
-            try {
-                const paths = product.images.map((url: string) => extractStoragePath(url)).filter(Boolean) as string[];
-                if (paths.length > 0) await supabase.storage.from('products').remove(paths);
-            } catch (storageError) {
-                console.error('Resim silme hatası (devam ediliyor):', storageError);
-            }
+        if (!product) {
+            return { success: false, data: null, error: 'Ürün bulunamadı veya zaten silinmiş' };
         }
 
-        // Ürünü sil
-        const { error } = await supabase.from('products').delete().eq('id', id);
+        // Soft delete: deleted_at = NOW() ve is_published = false
+        // Fiziksel DELETE YAPILMAZ — geçmiş sipariş bütünlüğü korunur
+        const { error } = await supabase
+            .from('products')
+            .update({
+                deleted_at: new Date().toISOString(),
+                is_published: false, // Artık görünmez
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .is('deleted_at', null); // Race condition koruması
+
         if (error) throw error;
 
+        // Audit log (fire-and-forget)
+        auditLog(supabase, {
+            action: 'SOFT_DELETE',
+            tableName: 'products',
+            recordId: id,
+            oldValues: { deleted_at: null, is_published: product.is_published, name: product.name },
+            newValues: { deleted_at: new Date().toISOString(), is_published: false },
+        });
+
+        // Storage temizliği — soft delete'den bağımsız; hata olursa devam et
+        // NOT: Resimler şimdilik KORUNUYOR (restore senaryosu için)
+        // Kalıcı temizlik için ayrı bir purge cron yazılabilir.
+
         revalidatePath('/admin/products');
+        if (product?.slug) revalidatePath(`/urun/${product.slug}`);
+        revalidatePath('/');
+        revalidatePath('/kategori/tum-urunler');
+        revalidatePath('/kategori', 'layout');
+
         return { success: true, data: null, error: null };
 
     } catch (error) {
@@ -325,13 +441,64 @@ export async function deleteProduct(id: string): Promise<ApiResponse<null>> {
     }
 }
 
+// ÜRÜN GERİ YÜKLE (Soft Delete'den Çıkarma)
+export async function restoreProduct(id: string): Promise<ApiResponse<null>> {
+    try {
+        const { supabase } = await verifyAdmin();
+
+        const { error } = await supabase
+            .from('products')
+            .update({
+                deleted_at: null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .not('deleted_at', 'is', null); // Sadece silinmişleri restore et
+
+        if (error) throw error;
+
+        auditLog(supabase, {
+            action: 'RESTORE',
+            tableName: 'products',
+            recordId: id,
+            oldValues: { deleted_at: 'set' },
+            newValues: { deleted_at: null },
+        });
+
+        revalidatePath('/admin/products');
+        revalidatePath('/');
+
+        return { success: true, data: null, error: null };
+
+    } catch (error) {
+        console.error('restoreProduct hatası:', error);
+        return { success: false, data: null, error: error instanceof Error ? error.message : 'Geri yükleme başarısız' };
+    }
+}
+
 // DURUM DEĞİŞTİR (Hızlı toggle işlemleri için)
 export async function toggleProductStatus(id: string, field: 'is_published' | 'in_stock', value: boolean) {
     try {
         const { supabase } = await verifyAdmin();
+
+        // Slug gerekli — revalidatePath için
+        const { data: product } = await supabase
+            .from('products')
+            .select('slug')
+            .eq('id', id)
+            .single();
+
         const { error } = await supabase.from('products').update({ [field]: value }).eq('id', id);
         if (error) throw error;
+
         revalidatePath('/admin/products');
+        if (product?.slug) {
+            revalidatePath(`/urun/${product.slug}`);
+        }
+        revalidatePath('/');
+        revalidatePath('/kategori/tum-urunler');
+        revalidatePath('/kategori', 'layout');
+
         return { success: true };
     } catch (error) {
         return { success: false, error: 'Durum güncellenemedi' };

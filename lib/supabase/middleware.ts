@@ -55,7 +55,12 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // 3. Admin Login Sayfası Koruması
+  // 3. Sipariş Takip → Giriş yapmış kullanıcıyı hesabına yönlendir
+  if (request.nextUrl.pathname === '/siparis-takip' && user) {
+    return NextResponse.redirect(new URL('/account/orders', request.url));
+  }
+
+  // 4. Admin Login Sayfası Koruması
   // Eğer zaten giriş yapmışsa ve login sayfasına gitmeye çalışıyorsa panele at
   if (request.nextUrl.pathname === '/admin/login' && user) {
      return NextResponse.redirect(new URL('/admin/products', request.url));

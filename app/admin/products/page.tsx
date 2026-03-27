@@ -96,7 +96,7 @@ export default function AdminProductsPage() {
         </div>
         <Link
           href="/admin/products/new"
-          className="flex items-center gap-2 bg-elite-brown text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition-colors"
+          className="flex items-center gap-2 bg-[#B89947] text-white px-4 py-2 hover:bg-opacity-90 transition-colors"
         >
           <Plus size={20} />
           Yeni Ürün Ekle
@@ -104,13 +104,13 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Arama */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+      <div className="bg-white p-4 rounded-xl border border-gray-100 mb-6">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
             placeholder="Ürün adı, kod veya kategori ara..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-elite-brown/20 focus:border-elite-brown transition-all"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -118,7 +118,7 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Tablo */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -135,7 +135,7 @@ export default function AdminProductsPage() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-elite-brown" />
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-[#B89947]" />
                     <span className="text-gray-400 mt-2 block">Yükleniyor...</span>
                   </td>
                 </tr>
@@ -150,7 +150,7 @@ export default function AdminProductsPage() {
                   <tr key={product.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 relative rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                        <div className="w-12 h-12 relative overflow-hidden bg-gray-100 flex-shrink-0">
                           {product.images?.[0] ? (
                             <Image
                               src={product.images[0]}
@@ -182,7 +182,7 @@ export default function AdminProductsPage() {
                     <td className="py-4 px-6 text-center">
                       <button
                         onClick={() => handleToggleStatus(product.id, 'in_stock', product.in_stock)}
-                        className={`inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                        className={`inline-flex items-center justify-center w-8 h-8 transition-colors ${
                           product.in_stock 
                             ? 'bg-green-100 text-green-600 hover:bg-green-200' 
                             : 'bg-red-100 text-red-600 hover:bg-red-200'
@@ -195,7 +195,7 @@ export default function AdminProductsPage() {
                     <td className="py-4 px-6 text-center">
                       <button
                         onClick={() => handleToggleStatus(product.id, 'is_published', product.is_published)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        className={`px-3 py-1 text-xs font-medium transition-colors ${
                           product.is_published
                             ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -209,13 +209,13 @@ export default function AdminProductsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="p-2 text-gray-400 hover:text-elite-brown hover:bg-elite-brown/10 rounded-lg transition-colors"
+                          className="p-2 text-gray-400 hover:text-[#B89947] hover:bg-[#B89947]/10 transition-colors"
                         >
                           <Edit size={18} />
                         </Link>
                         <button
                           onClick={() => handleDelete(product.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <Trash2 size={18} />
                         </button>

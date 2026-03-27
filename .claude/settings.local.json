@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next build)",
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "Bash(grep -rn \"from ''''@/lib/supabase/server''''\\\\|from \"\"@/lib/supabase/server\"\"\" --include=\"*.tsx\" --include=\"*.ts\")"
+    ]
+  }
+}

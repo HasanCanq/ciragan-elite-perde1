@@ -1,12 +1,14 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { getAllOrders } from '@/lib/actions';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, OrderStatus, PILE_LABELS_UPPER } from '@/types';
 import { formatPrice } from '@/lib/utils';
-import { Package } from 'lucide-react';
+import { Package, ExternalLink } from 'lucide-react';
 import { OrderStatusUpdater } from '../dashboard/OrderStatusUpdater';
 import { OrderDetailModal } from './OrderDetailModal';
+import { CancelOrderModal } from './CancelOrderModal';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Admin, her zaman güncel
 
 interface PageProps {
   searchParams: Promise<{ page?: string; status?: string }>;
@@ -17,7 +19,7 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
 
   if (error || !ordersData) {
     return (
-      <div className="text-red-500 p-4 bg-red-50 rounded-lg">
+      <div className="text-red-500 p-4 bg-red-50">
         Siparişler yüklenemedi: {error}
       </div>
     );
@@ -67,7 +69,7 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-4">
-                  <span className="font-mono text-sm font-medium text-elite-black">
+                  <span className="font-mono text-sm font-medium text-black">
                     {order.order_number}
                   </span>
                 </td>
@@ -103,7 +105,7 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
                 </td>
                 <td className="px-4 py-4">
                   <div>
-                    <span className="font-semibold text-elite-black block">
+                    <span className="font-semibold text-black block">
                       {formatPrice(order.total_amount)}
                     </span>
                     {order.shipping_cost > 0 && (
@@ -115,7 +117,7 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
                 </td>
                 <td className="px-4 py-4">
                   <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                    className={`inline-flex items-center px-2.5 py-1 text-xs font-medium ${
                       ORDER_STATUS_COLORS[order.status as OrderStatus]
                     }`}
                   >
@@ -141,11 +143,24 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
                 </td>
                 <td className="px-4 py-4">
                   <div className="flex items-center gap-2">
+                    <Link
+                      href={`/admin/orders/${order.id}`}
+                      title="Sipariş Detayı"
+                      className="p-1.5 rounded text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
                     <OrderDetailModal order={order} />
                     <OrderStatusUpdater
                       orderId={order.id}
                       currentStatus={order.status as OrderStatus}
                     />
+                    {order.status !== 'CANCELLED' && order.status !== 'REFUNDED' && (
+                      <CancelOrderModal
+                        orderId={order.id}
+                        orderNumber={order.order_number}
+                      />
+                    )}
                   </div>
                 </td>
               </tr>
@@ -167,7 +182,7 @@ async function OrdersTable({ page, status }: { page: number; status?: OrderStatu
                 href={`?page=${p}${status ? `&status=${status}` : ''}`}
                 className={`px-3 py-1 rounded text-sm ${
                   p === page
-                    ? 'bg-elite-gold text-white'
+                    ? 'bg-[#B89947] text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -210,7 +225,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-elite-black">Siparişler</h1>
+        <h1 className="text-2xl font-bold text-black">Siparişler</h1>
         <p className="text-gray-500 mt-1">
           Tüm siparişleri buradan yönetebilirsiniz.
         </p>
@@ -222,10 +237,10 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
           <a
             key={s}
             href={s === 'ALL' ? '/admin/orders' : `?status=${s}`}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
               (s === 'ALL' && !status) || s === status
-                ? 'bg-elite-gold text-white'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-elite-gold'
+                ? 'bg-[#B89947] text-white'
+                : 'bg-white text-gray-600 border border-gray-200 hover:border-[#B89947]'
             }`}
           >
             {s === 'ALL' ? 'Tümü' : ORDER_STATUS_LABELS[s]}
@@ -234,7 +249,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       </div>
 
       {/* Orders Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="bg-white rounded-xl border border-gray-100">
         <Suspense fallback={<TableLoading />}>
           <OrdersTable page={page} status={status} />
         </Suspense>

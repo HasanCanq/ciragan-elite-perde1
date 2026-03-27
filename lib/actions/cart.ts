@@ -10,8 +10,9 @@ import {
   CartItem,
   ApiResponse,
   PileFactor,
-  PILE_COEFFICIENTS_UPPER,
 } from '@/types';
+import { validateCalcInput }    from '@/lib/engine/validator';
+import { type CalculationType } from '@/lib/engine/core';
 
 // =====================================================
 // TİPLER
@@ -29,10 +30,14 @@ interface CartItemDB {
   updated_at: string;
 }
 
+// loadCart sorgusunun SELECT'te döndürdüğü alanların alt kümesi.
+// CartItemDB tam tablo satırını temsil eder; cart_id/created_at/updated_at burada seçilmez.
+type LoadedCartItem = Pick<CartItemDB, 'id' | 'product_id' | 'width_cm' | 'height_cm' | 'pile_factor' | 'quantity'>;
+
 interface CartWithItems {
   id: string;
   user_id: string;
-  items: CartItemDB[];
+  items: LoadedCartItem[];
 }
 
 interface ServerCartItem {
@@ -53,6 +58,75 @@ interface ServerCartItem {
 // =====================================================
 
 /**
+ * validateCalcInput() kullanarak her kalemi motor ile doğrular.
+ * Geçersiz/manipüle edilmiş ölçüler DB'ye yazılmaz.
+ * mt geçiş dönemi: pile UUID yok — boyut aralığı manuel kontrol.
+ */
+async function validateCartItems(
+  items:    CartItem[],
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<CartItem[]> {
+  if (items.length === 0) return [];
+
+  const productIds = Array.from(new Set(items.map((i) => i.productId)));
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, base_price, calculation_type, min_width_cm, min_area_m2')
+    .in('id', productIds);
+
+  const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+
+  // Pleat bilgilerini topla — mt türü kalemler için
+  const pleatIds = Array.from(new Set(
+    items
+      .filter((i) => {
+        const ct = (productMap.get(i.productId)?.calculation_type ?? i.calculationType) as CalculationType;
+        return ct === 'mt' && i.pleatId;
+      })
+      .map((i) => i.pleatId!)
+  ));
+
+  const pleatMap = new Map<string, { id: string; name: string; multiplier: number }>();
+  if (pleatIds.length > 0) {
+    const { data: pleatRows } = await supabase
+      .from('product_pleats')
+      .select('id, name, multiplier')
+      .in('id', pleatIds);
+    for (const pleat of pleatRows ?? []) {
+      pleatMap.set(pleat.id, pleat);
+    }
+  }
+
+  const valid: CartItem[] = [];
+
+  for (const item of items) {
+    const product = productMap.get(item.productId);
+    if (!product) continue; // DB'de bulunmayan ürün — güvenlik gereği atla
+
+    const calcType = (product.calculation_type ?? item.calculationType) as CalculationType;
+
+    // mt: pleatId yoksa veya DB'de bulunamıyorsa geç
+    if (calcType === 'mt' && (!item.pleatId || !pleatMap.has(item.pleatId))) continue;
+
+    // Tüm türler: tam motor validasyonu
+    const result = validateCalcInput({
+      calculationType: calcType,
+      basePrice:       product.base_price,
+      widthCm:         item.width,
+      heightCm:        item.height,
+      quantity:        item.quantity,
+      pleat:           calcType === 'mt' ? pleatMap.get(item.pleatId!) : undefined,
+      minWidthCm:      product.min_width_cm ?? null,
+      minAreaM2:       product.min_area_m2  ?? null,
+    });
+
+    if (result.ok) valid.push(item);
+  }
+
+  return valid;
+}
+
+/**
  * Client-side sepeti veritabanına senkronize et
  * Kullanıcı giriş yaptığında veya sepet değiştiğinde çağrılır
  */
@@ -70,6 +144,9 @@ export async function syncCart(items: CartItem[]): Promise<ApiResponse<null>> {
         success: false,
       };
     }
+
+    // Kalem validasyonu: geçersiz/manipüle edilmiş ölçüleri DB'ye yazma
+    const validItems = await validateCartItems(items, supabase);
 
     // Kullanıcının sepetini bul veya oluştur
     let { data: cart } = await supabase
@@ -95,9 +172,9 @@ export async function syncCart(items: CartItem[]): Promise<ApiResponse<null>> {
       .delete()
       .eq('cart_id', cart.id);
 
-    // Yeni kalemleri ekle
-    if (items.length > 0) {
-      const cartItems = items.map((item) => ({
+    // Yeni kalemleri ekle (yalnızca doğrulanmış kalemler)
+    if (validItems.length > 0) {
+      const cartItems = validItems.map((item) => ({
         cart_id: cart.id,
         product_id: item.productId,
         width_cm: item.width,
@@ -173,7 +250,7 @@ export async function loadCart(): Promise<ApiResponse<ServerCartItem[]>> {
     }
 
     // Ürün bilgilerini getir
-    const productIds = cart.cart_items.map((item: CartItemDB) => item.product_id);
+    const productIds = cart.cart_items.map((item: LoadedCartItem) => item.product_id);
     const { data: products } = await supabase
       .from('products')
       .select('id, name, slug, images, base_price, stock_quantity, is_published')
@@ -192,8 +269,8 @@ export async function loadCart(): Promise<ApiResponse<ServerCartItem[]>> {
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const cartItems: ServerCartItem[] = cart.cart_items
-      .filter((item: CartItemDB) => productMap.has(item.product_id))
-      .map((item: CartItemDB) => {
+      .filter((item: LoadedCartItem) => productMap.has(item.product_id))
+      .map((item: LoadedCartItem) => {
         const product = productMap.get(item.product_id)!;
         return {
           productId: item.product_id,

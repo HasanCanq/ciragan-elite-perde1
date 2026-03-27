@@ -3,8 +3,8 @@ import Image from 'next/image'
 
 export default function NotFound() {
   return (
-    // bg-elite-brown: Resim yüklenene kadar veya arkada boşluk kalırsa kahverengi görünür
-    <div className="relative min-h-screen flex items-center justify-center bg-elite-brown overflow-hidden">
+    // bg-[#B89947]: Resim yüklenene kadar veya arkada boşluk kalırsa kahverengi görünür
+    <div className="relative min-h-screen flex items-center justify-center bg-[#B89947] overflow-hidden">
       
       {/* Arkaplan Resmi - Supabase */}
       <div className="absolute inset-0 opacity-20"> {/* opacity-20: Resmi karartır ki yazı okunsun */}
@@ -36,7 +36,7 @@ export default function NotFound() {
           <div className="pt-8">
             <Link 
               href="/"
-              className="inline-block px-8 py-3 border border-white/20 text-white hover:bg-white hover:text-elite-brown transition-all duration-300 rounded-full font-medium tracking-wide"
+              className="inline-block px-8 py-3 border border-white/20 text-white hover:bg-white hover:text-[#B89947] transition-all duration-300 rounded-full font-medium tracking-wide"
             >
               ANASAYFAYA DÖN
             </Link>

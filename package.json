@@ -6,21 +6,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify-order": "npx tsx scripts/verify-e2e-order.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.38.0",
+    "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.91.1",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.2",
     "date-fns": "^4.1.0",
+    "decimal.js": "^10.6.0",
     "iyzipay": "^2.0.65",
     "lucide-react": "^0.563.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
+    "react-hook-form": "^7.71.2",
+    "server-only": "^0.0.1",
+    "zod": "^4.3.6",
     "zustand": "^5.0.10"
+  },
+  "overrides": {
+    "glob": ">=10.5.0"
   },
   "devDependencies": {
     "@types/node": "^20",

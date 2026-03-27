@@ -78,7 +78,7 @@ export default function SettingsPage() {
   if (isFetching) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 text-elite-gold animate-spin" />
+        <Loader2 className="w-8 h-8 text-[#B89947] animate-spin" />
       </div>
     );
   }
@@ -87,8 +87,8 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-elite-gold/20 rounded-xl flex items-center justify-center">
-          <SettingsIcon className="w-6 h-6 text-elite-gold" />
+        <div className="w-12 h-12 bg-[#FAFAFA] rounded-xl flex items-center justify-center">
+          <SettingsIcon className="w-6 h-6 text-[#B89947]" />
         </div>
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Mağaza Ayarları</h1>
@@ -115,7 +115,7 @@ export default function SettingsPage() {
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Basic Info */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="bg-white rounded-xl p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
                 Temel Bilgiler
               </h2>
@@ -130,8 +130,8 @@ export default function SettingsPage() {
                     value={siteName}
                     onChange={(e) => setSiteName(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                    className="w-full px-4 py-2 border border-gray-200
+                             focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                              transition-colors outline-none"
                   />
                 </div>
@@ -145,8 +145,8 @@ export default function SettingsPage() {
                     value={supportEmail}
                     onChange={(e) => setSupportEmail(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                    className="w-full px-4 py-2 border border-gray-200
+                             focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                              transition-colors outline-none"
                   />
                 </div>
@@ -160,8 +160,8 @@ export default function SettingsPage() {
                     value={supportPhone}
                     onChange={(e) => setSupportPhone(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                             focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                    className="w-full px-4 py-2 border border-gray-200
+                             focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                              transition-colors outline-none"
                   />
                 </div>
@@ -169,7 +169,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Shipping Settings */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="bg-white rounded-xl p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
                 Kargo Ayarları
               </h2>
@@ -187,8 +187,8 @@ export default function SettingsPage() {
                       required
                       min="0"
                       step="0.01"
-                      className="w-full px-4 py-2 pr-12 border border-gray-200 rounded-lg
-                               focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                      className="w-full px-4 py-2 pr-12 border border-gray-200
+                               focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                                transition-colors outline-none"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -212,8 +212,8 @@ export default function SettingsPage() {
                       required
                       min="0"
                       step="0.01"
-                      className="w-full px-4 py-2 pr-12 border border-gray-200 rounded-lg
-                               focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                      className="w-full px-4 py-2 pr-12 border border-gray-200
+                               focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                                transition-colors outline-none"
                     />
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
@@ -225,7 +225,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Maintenance Mode */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="bg-white rounded-xl p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
                 Bakım Modu
               </h2>
@@ -236,7 +236,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={maintenanceMode}
                     onChange={(e) => setMaintenanceMode(e.target.checked)}
-                    className="mt-1 w-5 h-5 text-elite-gold border-gray-300 rounded focus:ring-elite-gold"
+                    className="mt-1 w-5 h-5 text-[#B89947] border-gray-300 rounded focus:ring-[#B89947]"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -259,8 +259,8 @@ export default function SettingsPage() {
                       onChange={(e) => setMaintenanceMessage(e.target.value)}
                       rows={3}
                       placeholder="Ziyaretçilere gösterilecek mesaj..."
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg
-                               focus:ring-2 focus:ring-elite-gold/20 focus:border-elite-gold
+                      className="w-full px-4 py-2 border border-gray-200
+                               focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947]
                                transition-colors outline-none resize-none"
                     />
                   </div>
@@ -272,7 +272,7 @@ export default function SettingsPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Current Settings Info */}
-            <div className="bg-elite-bone rounded-xl p-6">
+            <div className="bg-white rounded-xl p-6">
               <h3 className="font-medium text-gray-900 mb-4">Mevcut Ayarlar</h3>
               <div className="space-y-3 text-sm">
                 <div>
@@ -301,7 +301,7 @@ export default function SettingsPage() {
               type="submit"
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 px-6 py-3
-                       bg-elite-gold text-white rounded-lg hover:bg-elite-gold/90
+                       bg-[#B89947] text-white hover:bg-[#FAFAFA]
                        transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (

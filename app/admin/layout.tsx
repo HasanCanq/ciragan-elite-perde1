@@ -51,7 +51,7 @@ export default async function AdminLayout({
       {/* Main Content */}
       <div className="lg:ml-64">
         {/* Top Bar */}
-        <header className="h-16 bg-white shadow-sm flex items-center justify-between px-4 lg:px-6">
+        <header className="h-16 bg-white flex items-center justify-between px-4 lg:px-6">
           {/* Mobilde hamburger buton alanı için sol boşluk */}
           <h1 className="text-lg font-medium text-gray-700 pl-12 lg:pl-0 hidden sm:block">
             Yönetim Paneli
@@ -60,10 +60,10 @@ export default async function AdminLayout({
           <div className="sm:hidden pl-12" />
           <div className="flex items-center gap-3">
             <span className="text-sm text-gray-500 hidden sm:inline">
-              Hoş geldin, <span className="font-medium text-elite-black">{profile.full_name || profile.email}</span>
+              Hoş geldin, <span className="font-medium text-black">{profile.full_name || profile.email}</span>
             </span>
-            <div className="w-10 h-10 rounded-full bg-elite-gold/20 flex items-center justify-center">
-              <span className="text-elite-gold font-bold">
+            <div className="w-10 h-10 bg-[#FAFAFA] flex items-center justify-center">
+              <span className="text-[#B89947] font-bold">
                 {(profile.full_name || profile.email)?.[0]?.toUpperCase()}
               </span>
             </div>
