@@ -35,6 +35,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
     // Birim maliyet ₺/m² — DB'de henüz yok (base_cost sütunu ileride eklenecek)
     base_cost: (initialData as any)?.base_cost ?? 0,
     model_id: (initialData as any)?.model_id || '',
+    calculation_type: (initialData as any)?.calculation_type || 'adet',
   });
 
   const [compressing, setCompressing] = useState(false);
@@ -126,6 +127,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
       data.append('category_id', formData.category_id);
       data.append('in_stock', String(formData.in_stock));
       data.append('is_published', String(formData.is_published));
+      data.append('calculation_type', formData.calculation_type);
       data.append('stock_quantity', parseFloat(String(formData.stock_quantity)).toFixed(2));
       if (formData.model_id) data.append('model_id', formData.model_id);
       data.append('low_stock_threshold', parseFloat(String(formData.low_stock_threshold)).toFixed(2));
@@ -315,7 +317,9 @@ export default function ProductForm({ initialData }: ProductFormProps) {
               {/* Fiyat ve Kategori */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Satış Fiyatı (₺/m²)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Satış Fiyatı ({formData.calculation_type === 'mt' ? '₺/m' : formData.calculation_type === 'm2' ? '₺/m²' : '₺/adet'})
+                </label>
                   <input
                     type="number"
                     name="base_price"
@@ -343,6 +347,26 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Hesaplama Türü */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Hesaplama Türü</label>
+                <select
+                  name="calculation_type"
+                  value={formData.calculation_type}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] bg-white"
+                >
+                  <option value="mt">mt — Metre işi (Tül, Fon perde)</option>
+                  <option value="m2">m² — Metrekare (Zebra, Stor, Jaluzi)</option>
+                  <option value="adet">Adet — Sabit fiyat (Aksesuar)</option>
+                </select>
+                {formData.calculation_type === 'mt' && (
+                  <p className="mt-1 text-xs text-[#B89947]">
+                    Seyrek (×2.0), Orta (×2.5) ve Sık (×3.0) pile seçenekleri otomatik oluşturulur.
+                  </p>
+                )}
               </div>
 
               {/* Perde Modeli */}
@@ -412,7 +436,9 @@ export default function ProductForm({ initialData }: ProductFormProps) {
               <div className="border-t border-gray-100 pt-5">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4">
                   Stok Yönetimi
-                  <span className="ml-2 text-xs font-normal text-gray-400">(Metrekare cinsinden)</span>
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    ({formData.calculation_type === 'mt' ? 'Metre cinsinden' : formData.calculation_type === 'm2' ? 'Metrekare cinsinden' : 'Adet cinsinden'})
+                  </span>
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>

@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import AssistantTriggerButtons from '@/components/advisor/AssistantTriggerButtons'
 
@@ -80,70 +81,58 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* ── Right: Image placeholder ───────────────────────────────────────
-          Replace the inner <div> with:
-            <Image src="..." alt="..." fill className="object-cover" />
-          when a real product image is available.
-
-          The outer wrapper keeps overflow hidden for future image zoom-hover.
+      {/* ── Right: Hero görseli ────────────────────────────────────────────
+          next/image + priority → tarayıcı <head>'e preload ekler,
+          sayfa yüklenirken görsel zaten hazır olur (LCP optimizasyonu).
+          fill + object-cover → container'ı bozmadan tüm alanı kaplar.
+          sizes → tarayıcıya hangi boyutu indireceğini söyler:
+            desktop → 50vw (~720-800px), mobil → 100vw
+          quality={90} → fotoğraf canlılığını korur, dosya boyutunu sıkıştırır.
           ────────────────────────────────────────────────────────────────── */}
       <div
         className={[
           'relative overflow-hidden',
           'order-1 lg:order-2',
-          'bg-[#F3F4F6]',
-          /* Mobile: proportional height; Desktop: fills grid row via stretch */
-          'h-[62vw] lg:h-auto',
+          'bg-[#1a1a1a]',           /* Görsel yüklenirken koyu arka plan */
+          'h-[62vw] lg:h-auto',     /* Mobil: orantılı; Desktop: grid satırını doldurur */
         ].join(' ')}
       >
-        {/* Placeholder interior — remove entirely when using real image */}
-        <PlaceholderVisual />
+        <Image
+          src="https://httjlhbvqksbdutrqoju.supabase.co/storage/v1/object/public/image/hero-salon.jpg"
+          alt="Hanedan Perde — lüks oturma odası keten tül koleksiyonu"
+          fill
+          priority                  /* Kritik: LCP görseli, preload edilir */
+          quality={90}              /* Canlı renk ve net doku için */
+          sizes="(min-width: 1024px) 50vw, 100vw"
+          className="object-cover object-center"
+          placeholder="blur"
+          blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFgABAQEAAAAAAAAAAAAAAAAABgUE/8QAIhAAAQQCAgMBAAAAAAAAAAAAAQIDBBEFEiExQVH/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8Ap9V6gtdOoZNnbS+WSONZ3tY0vc4NaMkkAZJAyfn3oiICIiD/2Q=="
+        />
 
-        {/* Product label chip — bottom-left */}
+        {/* Üst karartma gradyanı — sol içerik okunabilirliği için */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-transparent pointer-events-none"
+        />
+
+        {/* Koleksiyon etiketi — sol alt köşe */}
         <div className="absolute bottom-6 left-6 z-10">
           <span
             className={[
               'inline-block px-3 py-1.5',
               'text-[9px] tracking-[0.3em] uppercase text-black',
               'bg-white/85 backdrop-blur-sm',
-              'border border-[#F3F4F6]',
+              'border border-white/20',
             ].join(' ')}
           >
             Keten Tül Koleksiyonu
           </span>
         </div>
 
-        {/* Subtle corner markers — purely decorative */}
+        {/* Köşe işaretleri — dekoratif */}
         <CornerMarkers />
       </div>
     </section>
-  )
-}
-
-/* ── Placeholder visual ─────────────────────────────────────────────────── */
-function PlaceholderVisual() {
-  return (
-    <>
-      {/* Cross-hair guides */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 top-1/2 h-px bg-black/5 pointer-events-none"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-y-0 left-1/2 w-px bg-black/5 pointer-events-none"
-      />
-
-      {/* Center label */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none select-none">
-        <p className="text-[9px] tracking-[0.52em] uppercase text-[#B0B0B0]">
-          Keten Tül
-        </p>
-        <p className="text-[9px] tracking-[0.3em] uppercase text-[#C8C8C8]">
-          2025 · Koleksiyon
-        </p>
-      </div>
-    </>
   )
 }
 

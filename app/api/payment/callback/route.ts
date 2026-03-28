@@ -313,19 +313,35 @@ export async function POST(request: NextRequest) {
 // =====================================================
 async function restoreStockAndCancel(
   supabase: ReturnType<typeof getAdminSupabase>,
-  order: { id: string; order_items?: Array<{ product_id: string; quantity: number }> },
+  order: {
+    id: string;
+    order_items?: Array<{
+      product_id:      string | null;
+      area_m2:         number | null;
+      pile_coefficient: number | null;
+      quantity:        number | null;
+    }>;
+  },
   reason: string
 ) {
   for (const item of order.order_items ?? []) {
-    if (item.product_id) {
-      await (supabase as any).rpc('restore_stock', {
+    if (!item.product_id) continue;
+
+    // expire_pending_orders (migration 016) ile tutarlı formül:
+    //   area_m2 * pile_coefficient * quantity = place_order_atomic'te düşülen miktar
+    const restoreM2 = Math.round(
+      (item.area_m2 ?? 0) * (item.pile_coefficient ?? 1) * (item.quantity ?? 1) * 1000
+    ) / 1000;
+
+    if (restoreM2 > 0) {
+      await supabase.rpc('restore_stock', {
         p_product_id: item.product_id,
-        p_quantity: item.quantity,
+        p_quantity:   restoreM2,
       });
     }
   }
 
-  await (supabase as any)
+  await supabase
     .from('orders')
     .update({ status: 'CANCELLED', admin_note: reason })
     .eq('id', order.id)

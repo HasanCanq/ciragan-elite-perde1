@@ -183,7 +183,7 @@ export const getProductWithModelPublic = cache(
           description, image_url, is_active, display_order,
           created_at, updated_at
         ),
-        pleats:product_pleats(
+        pleats:product_pleats!product_pleats_product_id_fkey(
           id, name, multiplier, display_order, is_active
         )
       `)

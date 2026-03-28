@@ -208,6 +208,7 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
         const stockQuantity = parseFloat(formData.get('stock_quantity') as string || '0');
         const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
         const modelId = (formData.get('model_id') as string) || null;
+        const calculationType = (formData.get('calculation_type') as string) || 'adet';
 
         // 2. Slug oluştur ve kontrol et
         let slug = generateSlug(name);
@@ -239,12 +240,28 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
                 in_stock: inStock,
                 stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
                 low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
+                calculation_type: calculationType,
                 ...(modelId ? { model_id: modelId } : {}),
             })
             .select()
             .single();
 
         if (error) throw error;
+
+        // mt türü ürünlerde Seyrek/Orta/Sık pile seçeneklerini otomatik oluştur
+        if (calculationType === 'mt' && product) {
+            const defaultPleats = [
+                { name: 'Seyrek Pile', multiplier: 2.0, display_order: 1 },
+                { name: 'Orta Pile',   multiplier: 2.5, display_order: 2 },
+                { name: 'Sık Pile',    multiplier: 3.0, display_order: 3 },
+            ];
+            const { error: pleatError } = await supabase
+                .from('product_pleats')
+                .insert(defaultPleats.map((p) => ({ ...p, product_id: product.id, is_active: true })));
+            if (pleatError) {
+                console.error('createProduct: pile seçenekleri oluşturulamadı', pleatError.message);
+            }
+        }
 
         revalidatePath('/admin/products');
         // Yeni ürün → tüm listeleme sayfalarını geçersiz kıl
@@ -277,11 +294,12 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
         const stockQuantity = parseFloat(formData.get('stock_quantity') as string || '0');
         const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
         const modelId = (formData.get('model_id') as string) || null;
+        const calculationType = (formData.get('calculation_type') as string) || 'adet';
 
         // Mevcut ürünü al (images + slug + audit diff için)
         const { data: currentProduct } = await supabase
             .from('products')
-            .select('images, slug, name, base_price, is_published, in_stock, category_id')
+            .select('images, slug, name, base_price, is_published, in_stock, category_id, calculation_type')
             .eq('id', id)
             .single();
         const oldImages = currentProduct?.images || [];
@@ -327,6 +345,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
                 in_stock: inStock,
                 stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
                 low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
+                calculation_type: calculationType,
                 ...(modelId ? { model_id: modelId } : {}),
                 updated_at: new Date().toISOString()
             })
@@ -336,6 +355,28 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
 
         if (error) throw error;
 
+        // calculation_type mt'ye değiştiyse ve henüz pile yoksa otomatik oluştur
+        const prevType = (currentProduct as any)?.calculation_type;
+        if (calculationType === 'mt') {
+            const { count } = await supabase
+                .from('product_pleats')
+                .select('*', { count: 'exact', head: true })
+                .eq('product_id', id);
+            if ((count ?? 0) === 0) {
+                const defaultPleats = [
+                    { name: 'Seyrek Pile', multiplier: 2.0, display_order: 1 },
+                    { name: 'Orta Pile',   multiplier: 2.5, display_order: 2 },
+                    { name: 'Sık Pile',    multiplier: 3.0, display_order: 3 },
+                ];
+                const { error: pleatError } = await supabase
+                    .from('product_pleats')
+                    .insert(defaultPleats.map((p) => ({ ...p, product_id: id, is_active: true })));
+                if (pleatError) {
+                    console.error('updateProduct: pile seçenekleri oluşturulamadı', pleatError.message);
+                }
+            }
+        }
+
         // Audit log — fiyat değişimi, yayım durumu vb. (fire-and-forget)
         if (currentProduct) {
             const newSnapshot = {
@@ -344,6 +385,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
                 is_published: isPublished,
                 in_stock: inStock,
                 category_id: categoryId || null,
+                calculation_type: calculationType,
             };
             const oldSnapshot = {
                 name: currentProduct.name,
@@ -351,6 +393,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
                 is_published: currentProduct.is_published,
                 in_stock: currentProduct.in_stock,
                 category_id: currentProduct.category_id,
+                calculation_type: prevType,
             };
             const { oldDiff, newDiff } = diffObjects(
                 oldSnapshot as Record<string, unknown>,

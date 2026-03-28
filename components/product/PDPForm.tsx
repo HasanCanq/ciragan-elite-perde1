@@ -1,8 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
-import { Plus, Minus } from 'lucide-react'
+
+/* ──────────────────────────────────────────────────────────────
+   PDPForm — Sağ kolon ürün konfiguratör bileşeni
+   ──────────────────────────────────────────────────────────────
+   Temiz mimari:
+   • Ölü kod kaldırıldı (MeasurementInput, QuantitySelector placeholder'ları)
+   • Kumaş özellikleri → bağımsız SVG ikon pilleri
+   • measurementSection slotu gerçek MeasurementForm'u alır
+   • Link, Plus, Minus bağımlılıkları kaldırıldı
+   ────────────────────────────────────────────────────────────── */
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 export type Color = {
@@ -17,25 +25,91 @@ export type AccordionItem = {
 }
 
 export type PDPFormProps = {
-  price:      number
-  colors:     Color[]
-  accordions: AccordionItem[]
-  /**
-   * Ölçü + sepet formu slotu.
-   * Geçilirse statik placeholder ölçü bölümünün ve sepete ekle butonunun
-   * yerine render edilir — gerçek MeasurementForm bileşeni buraya enjekte edilir.
-   * Geçilmezse orijinal statik placeholder gösterilir (tasarım aşaması).
-   */
+  colors:             Color[]
+  accordions:         AccordionItem[]
   measurementSection?: React.ReactNode
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   SUB-COMPONENTS
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   KUMAŞ ÖZELLİK İKONLARI — sıfır bağımlılık, saf inline SVG
+   ══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Accordion ──────────────────────────────────────────────────────────────
-   Uses max-height + opacity CSS transition — no JS animation loop.
-   +/- are Unicode math minus (U+2212) and plus for optical balance.
+const FabricIcon = () => (
+  <svg width="13" height="12" viewBox="0 0 13 12" fill="none" aria-hidden="true">
+    <path d="M1 2.5 Q3.25 0.5 6.5 2.5 Q9.75 4.5 12 2.5"  stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    <path d="M1 6   Q3.25 4   6.5 6   Q9.75 8   12 6"     stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    <path d="M1 9.5 Q3.25 7.5 6.5 9.5 Q9.75 11.5 12 9.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+  </svg>
+)
+
+const LightBlockIcon = () => (
+  <svg width="11" height="14" viewBox="0 0 11 14" fill="none" aria-hidden="true">
+    <rect x="0.5" y="0.5" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1"/>
+    <line x1="2.75" y1="3.5" x2="2.75" y2="10.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    <line x1="5.5"  y1="2.5" x2="5.5"  y2="11.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    <line x1="8.25" y1="3.5" x2="8.25" y2="10.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+  </svg>
+)
+
+const WashIcon = () => (
+  <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+    <path
+      d="M6 1 C6 1 11 7.5 11 10 A5 5 0 0 1 1 10 C1 7.5 6 1 6 1Z"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const EcoIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+    <path
+      d="M2.5 11.5 Q2.5 3.5 11 1.5 Q11 9.5 2.5 11.5Z"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+    <line x1="2.5" y1="11.5" x2="7" y2="7" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+  </svg>
+)
+
+type FabricProp = { icon: React.ReactNode; label: string }
+
+/* Kumaş özellikleri — ileride DB'den props olarak alınabilir */
+const FABRIC_PROPS: FabricProp[] = [
+  { icon: <FabricIcon />,    label: 'Linen %60 · Pamuk %40' },
+  { icon: <LightBlockIcon />, label: 'Işık Filtreleyici'     },
+  { icon: <WashIcon />,      label: '30°C Yıkanabilir'       },
+  { icon: <EcoIcon />,       label: 'OEKO-TEX Sertifikalı'  },
+]
+
+/* ── Kumaş özellikleri (ikon pill'leri) ─────────────────────────────────── */
+function FabricProperties() {
+  return (
+    <div className="border-t border-[#F3F4F6] pt-5">
+      <div className="flex flex-wrap gap-2">
+        {FABRIC_PROPS.map(({ icon, label }) => (
+          <span
+            key={label}
+            className={[
+              'inline-flex items-center gap-[7px]',
+              'px-3 py-[7px]',
+              'border border-[#EBEBEB]',
+              'text-[10px] tracking-[0.05em] text-[#6B7280]',
+            ].join(' ')}
+          >
+            <span className="text-[#B89947] flex-shrink-0">{icon}</span>
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Akordiyon ──────────────────────────────────────────────────────────────
+   max-height + opacity CSS geçişi — JS animasyon döngüsü yok.
    ─────────────────────────────────────────────────────────────────────────── */
 function Accordion({ title, content }: AccordionItem) {
   const [open, setOpen] = useState(false)
@@ -51,7 +125,6 @@ function Accordion({ title, content }: AccordionItem) {
         <span className="text-[11px] tracking-[0.18em] uppercase font-medium text-black">
           {title}
         </span>
-        {/* +/- — elegant, no icon dependency */}
         <span
           aria-hidden="true"
           className={[
@@ -79,9 +152,9 @@ function Accordion({ title, content }: AccordionItem) {
   )
 }
 
-/* ── Color swatches ─────────────────────────────────────────────────────────
-   Circular toggles: selected state = gold ring with offset.
-   Selected color name appears right-aligned on the same row as the label.
+/* ── Renk seçici (swatch'lar) ───────────────────────────────────────────────
+   Yuvarlak doku damlaları: seçili = altın halka + offset.
+   Seçili renk adı satır sağında aria-live ile güncellenir.
    ─────────────────────────────────────────────────────────────────────────── */
 function ColorSwatches({ colors }: { colors: Color[] }) {
   const [selectedId, setSelectedId] = useState(colors[0]?.id ?? '')
@@ -89,21 +162,19 @@ function ColorSwatches({ colors }: { colors: Color[] }) {
 
   return (
     <div>
-      {/* Label row */}
       <div className="flex items-center justify-between mb-3.5">
         <p className="text-[11px] tracking-[0.15em] uppercase font-medium text-black">
           Renk
         </p>
         <p
-          className="text-[12px] tracking-[0.04em] text-[#9CA3AF] transition-[opacity] duration-150"
+          className="text-[12px] tracking-[0.04em] text-[#9CA3AF] transition-opacity duration-150"
           aria-live="polite"
         >
           {selectedName}
         </p>
       </div>
 
-      {/* Swatch row */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" role="group" aria-label="Renk seçimi">
         {colors.map((color) => (
           <button
             key={color.id}
@@ -117,6 +188,7 @@ function ColorSwatches({ colors }: { colors: Color[] }) {
               className={[
                 'block w-[22px] h-[22px] rounded-full',
                 'border border-black/10',
+                'shadow-[inset_0_1px_3px_rgba(0,0,0,0.12)]',
                 'transition-all duration-150',
                 selectedId === color.id
                   ? 'ring-[1.5px] ring-[#B89947] ring-offset-[3px]'
@@ -131,218 +203,30 @@ function ColorSwatches({ colors }: { colors: Color[] }) {
   )
 }
 
-/* ── Quantity selector ──────────────────────────────────────────────────────
-   Fixed 120px width. Sits in a 2-col grid with the CTA button.
-   Min qty = 1. Minus button disabled and visually fades at min.
-   ─────────────────────────────────────────────────────────────────────────── */
-function QuantitySelector() {
-  const [qty, setQty] = useState(1)
-
-  return (
-    <div
-      className="flex items-center border border-[#E5E7EB] h-[50px] w-[120px]"
-      role="group"
-      aria-label="Adet seçici"
-    >
-      <button
-        type="button"
-        onClick={() => setQty((q) => Math.max(1, q - 1))}
-        disabled={qty <= 1}
-        aria-label="Adeti azalt"
-        className={[
-          'flex items-center justify-center w-10 h-full shrink-0',
-          'text-black hover:text-[#B89947]',
-          'disabled:opacity-[0.22] disabled:cursor-default',
-          'transition-colors duration-200',
-        ].join(' ')}
-      >
-        <Minus size={13} strokeWidth={1.5} aria-hidden="true" />
-      </button>
-
-      <span
-        className="flex-1 text-center text-[14px] tracking-[0.08em] text-black select-none tabular-nums"
-        aria-live="polite"
-        aria-label={`Seçilen adet: ${qty}`}
-      >
-        {qty}
-      </span>
-
-      <button
-        type="button"
-        onClick={() => setQty((q) => q + 1)}
-        aria-label="Adeti artır"
-        className={[
-          'flex items-center justify-center w-10 h-full shrink-0',
-          'text-black hover:text-[#B89947]',
-          'transition-colors duration-200',
-        ].join(' ')}
-      >
-        <Plus size={13} strokeWidth={1.5} aria-hidden="true" />
-      </button>
-    </div>
-  )
-}
-
-/* ── Measurement input ──────────────────────────────────────────────────────
-   Design rules per spec:
-   • Label above, input below
-   • Placeholder "0"
-   • "cm" suffix right-aligned inside the input — achieved via absolute span
-     + right padding on the input so typed numbers never overlap the suffix
-   • Border: 1px border-gray-200 (#E5E7EB)
-   • Focus: ring-1 ring-[#B89947] + border-[#B89947]
-   • Native spinner arrows removed (appearance-none)
-   ─────────────────────────────────────────────────────────────────────────── */
-function MeasurementInput({ label, id }: { label: string; id: string }) {
-  return (
-    <div>
-      <label
-        htmlFor={id}
-        className="block text-[11px] tracking-[0.14em] uppercase font-medium text-black mb-2.5"
-      >
-        {label}
-      </label>
-
-      {/* Wrapper — needed to absolutely position the "cm" suffix */}
-      <div className="relative">
-        <input
-          id={id}
-          name={id}
-          type="number"
-          inputMode="decimal"
-          placeholder="0"
-          min="0"
-          max="600"
-          className={[
-            /* Layout */
-            'w-full px-4 pr-11 py-[14px]',
-            /* Typography */
-            'text-[15px] text-black tracking-[0.04em]',
-            /* Colors */
-            'bg-white',
-            /* Border — 1px, gray-200 per spec */
-            'border border-gray-200',
-            /* Placeholder */
-            'placeholder:text-[#DADADA]',
-            /* Focus — gold ring + gold border per spec */
-            'focus:outline-none',
-            'focus:ring-1 focus:ring-[#B89947]',
-            'focus:border-[#B89947]',
-            /* Smooth transition */
-            'transition-colors duration-200',
-            /* Remove native number spinner arrows */
-            '[appearance:textfield]',
-            '[&::-webkit-inner-spin-button]:appearance-none',
-            '[&::-webkit-outer-spin-button]:appearance-none',
-          ].join(' ')}
-        />
-
-        {/* "cm" unit — right-aligned inside the input, non-interactive */}
-        <span
-          aria-hidden="true"
-          className={[
-            'absolute right-4 top-1/2 -translate-y-1/2',
-            'text-[11px] font-normal tracking-[0.04em]',
-            'text-[#ADADAD]',
-            'select-none pointer-events-none leading-none',
-          ].join(' ')}
-        >
-          cm
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════════════════════════
    MAIN EXPORT — PDPForm
-   ═══════════════════════════════════════════════════════════════════════════ */
-export default function PDPForm({ price, colors, accordions, measurementSection }: PDPFormProps) {
-  /* Price formatted in Turkish locale */
-  const formattedPrice = new Intl.NumberFormat('tr-TR', {
-    style:                'currency',
-    currency:             'TRY',
-    maximumFractionDigits: 0,
-  }).format(price)
-
+   ══════════════════════════════════════════════════════════════════════════ */
+export default function PDPForm({
+  colors,
+  accordions,
+  measurementSection,
+}: PDPFormProps) {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* ── 1. Price ──────────────────────────────────────────────────────── */}
-      <div>
-        <p
-          className="text-[30px] lg:text-[32px] font-medium tracking-[0.01em] leading-none"
-          style={{ color: 'var(--accent)' }}   /* STRICTLY #B89947 */
-        >
-          {formattedPrice}
-        </p>
-        <p className="mt-[9px] text-[11px] tracking-[0.06em] text-[#9CA3AF]">
-          m² başına fiyat · KDV dahil
-        </p>
-      </div>
+      {/* ── 1. Kumaş özellikleri (ikon pill'leri) ─────────────────── */}
+      <FabricProperties />
 
-      {/* ── 2. Fabric description ─────────────────────────────────────────── */}
-      <div className="border-t border-[#F3F4F6] pt-5">
-        <p className="text-[13px] text-[#6B7280] leading-[1.85] tracking-[0.02em]">
-          Hassas dokuma tekniğiyle üretilen keten-pamuk karışımı kumaş, ışığı tam
-          olarak keser. Canlı renkleri ve doğal lif yapısıyla mekânlarınıza huzur katar.
-        </p>
-        <p className="mt-2.5 text-[11px] tracking-[0.06em] text-[#AAAAAA]">
-          Linen %60&nbsp;·&nbsp;Pamuk %40
-        </p>
-      </div>
+      {/* ── 3. Renk seçici (swatch'lar) ───────────────────────────── */}
+      {colors.length > 0 && <ColorSwatches colors={colors} />}
 
-      {/* ── 3. Color swatches ─────────────────────────────────────────────── */}
-      <ColorSwatches colors={colors} />
-
-      {/* ── Thin divider ──────────────────────────────────────────────────── */}
+      {/* ── İnce bölücü ───────────────────────────────────────────── */}
       <div className="h-px bg-[#F3F4F6]" aria-hidden="true" />
 
-      {/* ── 4 & 5. Ölçü + Sepete Ekle ────────────────────────────────────────
-          measurementSection prop geçildiyse gerçek MeasurementForm render edilir.
-          Geçilmezse tasarım aşamasına ait statik placeholder gösterilir.
-          ─────────────────────────────────────────────────────────────────── */}
-      {measurementSection ?? (
-        <>
-          <div>
-            <div className="flex items-baseline justify-between mb-5">
-              <p className="text-[11px] tracking-[0.18em] uppercase font-medium text-black">
-                Ölçü Girin
-              </p>
-              <Link
-                href="/olcu-kilavuzu"
-                className={[
-                  'text-[10px] tracking-[0.08em] text-[#9CA3AF]',
-                  'border-b border-[#E0E0E0] pb-[1px]',
-                  'hover:text-[#B89947] hover:border-[#B89947]',
-                  'transition-colors duration-200 shrink-0',
-                ].join(' ')}
-              >
-                Ölçü Nasıl Alınır?
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <MeasurementInput label="En"  id="pdp-en"  />
-              <MeasurementInput label="Boy" id="pdp-boy" />
-            </div>
-            <p className="mt-3 text-[10px] tracking-[0.04em] text-[#C8C8C8]">
-              Min 60 × 100 cm · Maks 600 × 600 cm
-            </p>
-          </div>
+      {/* ── 4. Ölçü + Sepete Ekle (MeasurementForm slotu) ──────────── */}
+      {measurementSection}
 
-          <div className="grid grid-cols-[auto_1fr] gap-3">
-            <QuantitySelector />
-            <button
-              type="button"
-              className="h-[50px] bg-black text-white hover:bg-[#B89947] text-[11px] tracking-[0.38em] uppercase font-medium transition-colors duration-300"
-            >
-              Sepete Ekle
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── 6. Accordions ─────────────────────────────────────────────────── */}
+      {/* ── 5. Akordeonlar ────────────────────────────────────────── */}
       <div className="border-b border-[#F3F4F6]">
         {accordions.map((item) => (
           <Accordion key={item.title} {...item} />

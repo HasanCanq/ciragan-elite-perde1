@@ -520,33 +520,8 @@ export interface PaginatedResponse<T> {
 // =====================================================
 // FORM TİPLERİ
 // =====================================================
-
-export interface CheckoutFormData {
-  email: string;
-  fullName: string;
-  phone: string;
-  shippingAddress: string;
-  billingAddress?: string;
-  sameAsBilling: boolean;
-  customerNote?: string;
-  paymentMethod: 'credit_card' | 'bank_transfer' | 'cash_on_delivery';
-}
-
-// Kredi kartı verileri (ASLA DB'ye yazılmaz - sadece bellek içi transit)
-export interface CreditCardData {
-  cardHolderName: string;
-  cardNumber: string;
-  expireMonth: string;
-  expireYear: string;
-  cvc: string;
-}
-
-// 3D Secure başlatma sonucu
-export interface ThreedsInitResult {
-  orderId: string;
-  orderNumber: string;
-  threeDSHtmlContent: string;
-}
+// CheckoutFormData ve CheckoutFormInput lib/actions/checkout.ts'den export edilir.
+// Zod şeması orada tanımlıdır; bu dosyada tekrar tanımlanmaz.
 
 // =====================================================
 // PAYMENT TRANSACTION LOG TİPLERİ
@@ -613,18 +588,20 @@ export type PriceCalculation = PriceCalculationInput;
 // SABİTLER
 // =====================================================
 
-// Pile katsayıları
+// Pile katsayıları — Türk perde sektörü standardı
+// Formül: en_cm × katsayı / 100 = gereken kumaş metresi
+// Seyrek 1:2 | Orta 1:2.5 | Sık 1:3
 export const PILE_COEFFICIENTS: Record<PileRatio, number> = {
-  seyrek: 1.0,
-  normal: 1.2,
-  sik: 1.3,
+  seyrek: 2.0,
+  normal: 2.5,
+  sik: 3.0,
 };
 
 // Pile katsayıları (büyük harfli enum için)
 export const PILE_COEFFICIENTS_UPPER: Record<PileFactor, number> = {
-  SEYREK: 1.0,
-  NORMAL: 1.2,
-  SIK: 1.3,
+  SEYREK: 2.0,
+  NORMAL: 2.5,
+  SIK: 3.0,
 };
 
 // Pile etiketleri

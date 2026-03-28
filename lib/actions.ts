@@ -16,7 +16,6 @@ import {
   OrderInsert,
   OrderItemInsert,
   CartItem,
-  CheckoutFormData,
   ApiResponse,
   PaginatedResponse,
   PILE_COEFFICIENTS_UPPER,
@@ -25,6 +24,7 @@ import {
   Profile,
   type CalculationType,
 } from '@/types';
+import { type CheckoutFormData } from '@/lib/actions/checkout';
 
 // =====================================================
 // ÜRÜN İŞLEMLERİ

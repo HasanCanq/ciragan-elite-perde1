@@ -84,14 +84,14 @@ interface DisplayPreview {
 
 // ─── Sabit temel şema (bileşen dışında) ────────────────────
 //
-// z.number() kullanılır (z.coerce.number() değil).
-// register('en', { valueAsNumber: true }) string→number dönüşümünü
-// Zod öncesinde yapar; şema tutarlı bir Input=Output=number tipine sahip olur.
-// Bu, zodResolver'ın Resolver<FormValues> ile uyuşması için zorunludur.
+// en/boy: .catch(NaN) — input temizlenince valueAsNumber NaN üretir.
+// z.number() Zod v4'te NaN'ı reddeder ve İngilizce hata döner.
+// .catch(NaN) ile parse hatası yerine NaN geçirilir; superRefine
+// isNaN kontrolüyle Türkçe "En değeri giriniz." mesajını gösterir.
 
 const baseSchema = z.object({
-  en:        z.number(),
-  boy:       z.number(),
+  en:        z.number().catch(NaN),
+  boy:       z.number().catch(NaN),
   pileRatio: z.string(),
   quantity:  z.number().int().min(1, 'Miktar en az 1 olmalıdır.'),
 });
@@ -283,6 +283,8 @@ export default function MeasurementForm({ product, modelLimits, pleats }: Measur
         if (res.ok) {
           const data: CalcApiResponse = await res.json();
           setApiResult(data);
+          // JSON-LD şemasındaki fiyatı güncelle (ProductSchemaUpdater dinler)
+          window.dispatchEvent(new CustomEvent('seo:price-update', { detail: { price: data.preview.totalPrice } }));
         } else {
           setApiResult(null);
         }
@@ -591,11 +593,42 @@ function MeasureInput({
   );
 }
 
-/* ── Pile seçici ───────────────────────────────────────────
-   has-[:checked] CSS ile radio buton seçili stillemesi.
-   Sadece mt türü ürünlerde gösterilir.
-   Seçenekler product_pleats tablosundan DB'den gelir.
-   ────────────────────────────────────────────────────────── */
+/* ── Pile yoğunluk görselleştirici ─────────────────────────────────────────
+   Çubuk sayısı pile sıklığını temsil eder: seyrek=3, normal=5, sık=7.
+   Değişen yükseklikler organik, kumaş kıvrımı etkisi yaratır.
+   ─────────────────────────────────────────────────────────────────────────── */
+function PileDensityViz({ multiplier }: { multiplier: number }) {
+  const count   = multiplier >= 3.0 ? 7 : multiplier >= 2.5 ? 5 : 3;
+  // Organik görünüm için değişen yükseklikler (%)
+  const heights = [60, 100, 72, 95, 58, 88, 68];
+
+  return (
+    <div
+      className="flex items-end justify-center gap-[3px] h-7 w-10"
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className="w-[2.5px] rounded-full bg-current flex-shrink-0 transition-[height] duration-300"
+          style={{ height: `${heights[i % heights.length]}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function getPileDescription(multiplier: number): string {
+  if (multiplier >= 3.0) return 'Tam, volümlü';
+  if (multiplier >= 2.5) return 'Dengeli, klasik';
+  return 'Hafif, sade';
+}
+
+/* ── Pile seçici (lüks kart tasarımı) ──────────────────────────────────────
+   Yoğunluk görseli + isim + çarpan + hover/seçim açıklaması.
+   has-[:checked] ve group-has-[:checked] (Tailwind 3.4+) ile
+   JavaScript state kullanmadan seçili kart stillenir.
+   ─────────────────────────────────────────────────────────────────────────── */
 function PileSelector({
   registration,
   error,
@@ -609,49 +642,72 @@ function PileSelector({
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-3.5">
+      <div className="flex items-center gap-2 mb-4">
         <p className="text-[11px] tracking-[0.18em] uppercase font-medium text-black">
-          Pile Oranı
+          Pile Sıklığı
         </p>
         <div className="group relative">
           <Info size={13} strokeWidth={1.5} className="text-[#ADADAD] cursor-help" aria-hidden="true" />
           <div
-            className="invisible group-hover:visible absolute left-0 top-6 z-20 w-60 p-4 bg-[#111111] text-white text-[9px] tracking-[0.05em] leading-relaxed"
+            className="invisible group-hover:visible absolute left-0 top-6 z-20 w-56 p-3.5 bg-[#111111] text-white text-[9px] tracking-[0.05em] leading-relaxed"
             role="tooltip"
           >
-            <p className="text-white/60">Pile oranı, perdenin dalgalılık yoğunluğunu belirler. Daha yüksek oran daha volümlü görünüm sağlar.</p>
+            <p className="text-white/60">
+              Pile sıklığı perdenin dalgalılık yoğunluğunu belirler.
+              Daha yüksek değer daha volümlü görünüm sağlar.
+            </p>
           </div>
         </div>
       </div>
 
       <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: `repeat(${pleats.length}, minmax(0, 1fr))` }}
+        className="grid gap-2.5"
+        style={{ gridTemplateColumns: `repeat(${Math.min(pleats.length, 3)}, minmax(0, 1fr))` }}
         role="radiogroup"
-        aria-label="Pile oranı seçimi"
+        aria-label="Pile sıklığı seçimi"
       >
         {pleats.map((pleat) => (
           <label
             key={pleat.id}
             className={[
-              'flex flex-col items-center justify-center gap-0.5',
-              'py-3 px-2 border text-center cursor-pointer',
-              'border-[#E5E5E5] hover:border-black',
+              'group relative flex flex-col items-center gap-2',
+              'pt-[18px] pb-[14px] px-2 border cursor-pointer text-center select-none',
+              'border-[#E5E5E5] hover:border-[#1a1a1a]',
               'has-[:checked]:border-black has-[:checked]:bg-[#111111] has-[:checked]:text-white',
               'transition-colors duration-200',
             ].join(' ')}
           >
             <input {...registration} type="radio" value={pleat.id} className="sr-only" />
-            <span className="text-[10px] tracking-[0.18em] uppercase font-medium">
+
+            {/* Yoğunluk görselleştirmesi */}
+            <PileDensityViz multiplier={pleat.multiplier} />
+
+            {/* İsim */}
+            <span className="text-[10px] tracking-[0.16em] uppercase font-medium leading-none">
               {pleat.name}
             </span>
-            <span className="text-[9px] opacity-60">×{pleat.multiplier}</span>
+
+            {/* Çarpan katsayısı */}
+            <span className="text-[9px] opacity-50 leading-none tabular-nums">
+              ×{pleat.multiplier}
+            </span>
+
+            {/* Açıklama — hover ve seçimde görünür */}
+            <span
+              className={[
+                'text-[8px] tracking-[0.04em] leading-[1.4]',
+                'opacity-0 group-hover:opacity-50 group-has-[:checked]:opacity-70',
+                'transition-opacity duration-200',
+              ].join(' ')}
+            >
+              {getPileDescription(pleat.multiplier)}
+            </span>
           </label>
         ))}
       </div>
 
       {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-red-500">{error}</p>
+        <p role="alert" className="mt-2 text-[10px] text-red-500">{error}</p>
       )}
     </div>
   );

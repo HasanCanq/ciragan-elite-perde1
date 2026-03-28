@@ -18,6 +18,13 @@ import {
 import { verifyAndExtract }           from '@/lib/engine/signer';
 import { validateCalcInput }          from '@/lib/engine/validator';
 import { calc, type CalculationType, type CoreCalcResult } from '@/lib/engine/core';
+import {
+  buildShippingSnapshot,
+  buildBillingSnapshot,
+  formatAddressText,
+  type ShippingAddressSnapshot,
+  type BillingAddressSnapshot,
+} from '@/lib/actions/checkout-helpers';
 
 // =====================================================
 // ZOD ŞEMALARI
@@ -92,7 +99,7 @@ const billingAddressSchema = addressBaseSchema
     }
   });
 
-const checkoutFormSchema = z
+export const checkoutFormSchema = z
   .object({
     email:         z.string().email('Geçerli bir e-posta adresi girin').max(255),
     shippingAddress: addressBaseSchema,
@@ -100,7 +107,7 @@ const checkoutFormSchema = z
     billingAddress: billingAddressSchema.optional(),
     customerNote:  z.string().max(1000).transform(htmlEncode).optional(),
     paymentMethod: z.enum(
-      ['credit_card', 'bank_transfer', 'cash_on_delivery'],
+      ['credit_card'],
       { error: 'Geçerli bir ödeme yöntemi seçin' }
     ),
     legalConsent: z.object({
@@ -128,67 +135,6 @@ export type CheckoutFormData  = z.output<typeof checkoutFormSchema>;
 
 type AddressBase    = z.output<typeof addressBaseSchema>;
 type BillingAddress = z.output<typeof billingAddressSchema>;
-
-// =====================================================
-// ADRES SNAPSHOT YAPILARI
-// =====================================================
-
-interface ShippingAddressSnapshot {
-  firstName:     string;
-  lastName:      string;
-  fullName:      string;
-  phone:         string;
-  addressLine:   string;
-  neighbourhood: string | null;
-  district:      string;
-  city:          string;
-  postalCode:    string | null;
-  country:       'TR';
-}
-
-interface BillingAddressSnapshot extends ShippingAddressSnapshot {
-  billingType:  'INDIVIDUAL' | 'CORPORATE';
-  taxNumber:    string | null;
-  taxOffice:    string | null;
-  companyName:  string | null;
-}
-
-function buildShippingSnapshot(a: AddressBase): ShippingAddressSnapshot {
-  return {
-    firstName:     a.firstName,
-    lastName:      a.lastName,
-    fullName:      [a.firstName, a.lastName].filter(Boolean).join(' '),
-    phone:         a.phone,
-    addressLine:   a.addressLine,
-    neighbourhood: a.neighbourhood ?? null,
-    district:      a.district,
-    city:          a.city,
-    postalCode:    a.postalCode || null,
-    country:       'TR',
-  };
-}
-
-function buildBillingSnapshot(a: BillingAddress): BillingAddressSnapshot {
-  return {
-    ...buildShippingSnapshot(a),
-    billingType: a.billingType,
-    taxNumber:   a.taxNumber || null,
-    taxOffice:   a.taxOffice || null,
-    companyName: a.companyName || null,
-  };
-}
-
-/** Kargo etiketi için düz metin adres satırı */
-function formatAddressText(s: ShippingAddressSnapshot): string {
-  const parts = [
-    s.fullName,
-    s.addressLine,
-    [s.neighbourhood, s.district, s.city].filter(Boolean).join(', '),
-    s.postalCode ? `${s.postalCode}` : null,
-    `Tel: ${s.phone}`,
-  ];
-  return parts.filter(Boolean).join('\n');
-}
 
 // =====================================================
 // VALİDASYON YARDIMCILARI (mevcut iç API)
@@ -412,8 +358,8 @@ export async function validateAndCalculatePrices(
       heightCm:        item.height,
       quantity:        item.quantity,
       pleat:           calcType === 'mt' ? pleatMap.get(item.pleatId!) : undefined,
-      minWidthCm:      product.min_width_cm ?? null,
-      minAreaM2:       product.min_area_m2  ?? null,
+      minWidthCm:      product.min_width_cm ?? undefined,
+      minAreaM2:       product.min_area_m2  ?? undefined,
     });
 
     if (!validated.ok) {

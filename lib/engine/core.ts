@@ -113,11 +113,11 @@ export type CoreCalcOutput =
 /**
  * Fiyat hesaplar. DB/HTTP bağımlılığı sıfır.
  *
- * @example mt — Tül perde
+ * @example mt — Tül/Fon perde
  * calc({ calculationType:'mt', basePrice:120, widthCm:200, heightCm:260,
- *        quantity:1, pleat:{ id:'x', name:'1x2.5 Normal', multiplier:2.5 }})
- * // fabricMeters = (200 × 2.5) / 100 = 5.000
- * // unitPrice    = 5.000 × 120       = 600.00 TL
+ *        quantity:1, pleat:{ id:'x', name:'Sık Pile', multiplier:3.0 }})
+ * // fabricMeters = (200 × 3.0) / 100 = 6.000
+ * // unitPrice    = 6.000 × 120       = 720.00 TL
  *
  * @example m2 — Zebra perde (min alan uygulaması)
  * calc({ calculationType:'m2', basePrice:450, widthCm:80, heightCm:160,
@@ -158,6 +158,8 @@ export function calc(input: CoreCalcInput): CoreCalcOutput {
     const { id: pleatId, name: pleatName, multiplier } = input.pleat;
 
     // fabricMeters = (widthCm × multiplier) / 100
+    // Türk perde sektörü standardı: en × pile çarpanı = gereken kumaş metresi
+    // Seyrek ×2.0 | Orta ×2.5 | Sık ×3.0
     const fabricMeters = new Decimal(widthCm)
       .times(multiplier)
       .dividedBy(100)
@@ -318,10 +320,10 @@ export function formatCalcResult(result: CoreCalcResult): string {
  * Üretimde çağrılmaz — sadece geliştirme/CI amaçlı.
  */
 export function __selfTest(): void {
-  // mt
+  // mt — widthCm × multiplier / 100: 200 × 3.0 / 100 = 6m, 6 × 120 = 720
   const mt = calc({ calculationType: 'mt', basePrice: 120, widthCm: 200, heightCm: 260, quantity: 1,
-    pleat: { id: 'x', name: '1x2.5 Normal', multiplier: 2.5 } });
-  console.assert(mt.ok && mt.result.totalPrice === 600, 'mt selftest başarısız');
+    pleat: { id: 'x', name: 'Sık Pile', multiplier: 3.0 } });
+  console.assert(mt.ok && mt.result.usedQuantity === 6 && mt.result.totalPrice === 720, 'mt selftest başarısız');
 
   // m2 — min width
   const m2 = calc({ calculationType: 'm2', basePrice: 450, widthCm: 80, heightCm: 160,

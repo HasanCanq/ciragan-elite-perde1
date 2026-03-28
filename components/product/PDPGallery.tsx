@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 
 export type GalleryImage = {
@@ -10,8 +10,8 @@ export type GalleryImage = {
 }
 
 /* ── Linen texture placeholder ──────────────────────────────────────────────
-   Swap the entire inner structure for a real <Image ... fill> when
-   product photography is available. The outer wrapper geometry stays intact.
+   Gerçek ürün fotoğrafı geldiğinde sadece iç yapı değiştirilir,
+   dış sarmalayıcı geometrisi aynı kalır.
    ─────────────────────────────────────────────────────────────────────────── */
 function LinenPlaceholder({
   label,
@@ -22,7 +22,7 @@ function LinenPlaceholder({
 }) {
   return (
     <div className="absolute inset-0 bg-[#EDECEA] flex flex-col items-center justify-center gap-1.5 select-none pointer-events-none">
-      {/* Fine weave texture at 3% opacity */}
+      {/* Hassas dokuma dokusu %3 opaklıkta */}
       <div
         aria-hidden="true"
         className="absolute inset-0 opacity-[0.035]"
@@ -53,12 +53,41 @@ function LinenPlaceholder({
 }
 
 /* ── Gallery ────────────────────────────────────────────────────────────────
-   Desktop: vertical thumbnail strip (68px) + main image side-by-side
-   Mobile:  main image + horizontal thumb strip below
-   Sticky: wraps with `lg:sticky lg:top-[88px] lg:self-start`
+   Desktop: dikey küçük resim şeridi (68px) + ana görsel yan yana
+   Mobil:   ana görsel + alt yatay küçük resim şeridi
+   Klavye:  ← → ile görsel değişimi (odaklandığında)
+
+   NOT: Sticky davranışı kaldırıldı — page.tsx sağ kolon sticky olarak
+        işaretlenmiştir. Galeri artık sayfa ile birlikte kaydırılır.
    ─────────────────────────────────────────────────────────────────────────── */
 export default function PDPGallery({ images }: { images: GalleryImage[] }) {
   const [activeIdx, setActiveIdx] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Klavye navigasyonu — functional update ile stale closure yok
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || images.length <= 1) return
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIdx((i) => (i + 1) % images.length)
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIdx((i) => (i - 1 + images.length) % images.length)
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        setActiveIdx(0)
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        setActiveIdx(images.length - 1)
+      }
+    }
+
+    el.addEventListener('keydown', onKey)
+    return () => el.removeEventListener('keydown', onKey)
+  }, [images.length])
 
   const ThumbButton = ({
     img,
@@ -95,15 +124,18 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
   )
 
   return (
-    /*  lg:sticky + lg:self-start = gallery sticks to the top of the viewport
-        while the right-side product form scrolls past it on desktop.
-        top-[88px] = 64px nav + 24px breathing room                           */
-    <div className="lg:sticky lg:top-[88px] lg:self-start">
+    <div
+      ref={containerRef}
+      tabIndex={images.length > 1 ? 0 : undefined}
+      role="region"
+      aria-label="Ürün görselleri"
+      className="focus:outline-none focus-visible:ring-1 focus-visible:ring-[#B89947]/30"
+    >
 
-      {/* Desktop: flex row — thumbnail strip left, main image right */}
+      {/* Desktop: küçük resim şeridi (sol) + ana görsel (sağ) */}
       <div className="flex gap-2.5">
 
-        {/* Vertical thumbnail column — hidden on mobile */}
+        {/* Dikey küçük resim kolonu — mobilde gizli */}
         <div className="hidden lg:flex flex-col gap-2 w-[66px] shrink-0">
           {images.map((img, i) => (
             <ThumbButton
@@ -115,16 +147,15 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
           ))}
         </div>
 
-        {/* Main image */}
+        {/* Ana görsel */}
         <div
           className="relative flex-1 overflow-hidden min-w-0"
           style={{ aspectRatio: '2/3' }}
         >
-          {/* Scaleable inner layer */}
           <div
             className={[
               'absolute inset-0',
-              'transition-transform duration-700',
+              'transition-opacity duration-500',
               'ease-[cubic-bezier(0.25,0.1,0.25,1)]',
             ].join(' ')}
           >
@@ -142,33 +173,51 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
             )}
           </div>
 
-          {/* Zero-index counter — bottom-right chip */}
-          <div
-            aria-hidden="true"
-            className={[
-              'absolute bottom-4 right-4 z-10',
-              'text-[9px] tracking-[0.18em] text-[#ABABAB]',
-              'font-light tabular-nums',
-            ].join(' ')}
-          >
-            {String(activeIdx + 1).padStart(2, '0')}&nbsp;/&nbsp;
-            {String(images.length).padStart(2, '0')}
-          </div>
+          {/* Görsel sayacı — sağ alt köşe */}
+          {images.length > 1 && (
+            <div
+              aria-hidden="true"
+              className={[
+                'absolute bottom-4 right-4 z-10',
+                'text-[9px] tracking-[0.18em] text-[#ABABAB]',
+                'font-light tabular-nums',
+              ].join(' ')}
+            >
+              {String(activeIdx + 1).padStart(2, '0')}&nbsp;/&nbsp;
+              {String(images.length).padStart(2, '0')}
+            </div>
+          )}
+
+          {/* Klavye yardım ipucu — yalnızca odak alındığında */}
+          {images.length > 1 && (
+            <div
+              aria-hidden="true"
+              className={[
+                'absolute bottom-4 left-4 z-10',
+                'opacity-0 focus-within:opacity-100',
+                'transition-opacity duration-300',
+              ].join(' ')}
+            >
+              <span className="text-[8px] tracking-[0.12em] text-[#ABABAB]">← →</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Mobile: horizontal thumbnail strip — hidden on lg+ */}
-      <div className="lg:hidden flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
-        {images.map((img, i) => (
-          <ThumbButton
-            key={img.id}
-            img={img}
-            idx={i}
-            className="shrink-0"
-            style={{ aspectRatio: '2/3', width: '18%' }}
-          />
-        ))}
-      </div>
+      {/* Mobil: yatay küçük resim şeridi — lg+ boyutlarda gizli */}
+      {images.length > 1 && (
+        <div className="lg:hidden flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
+          {images.map((img, i) => (
+            <ThumbButton
+              key={img.id}
+              img={img}
+              idx={i}
+              className="shrink-0"
+              style={{ aspectRatio: '2/3', width: '18%' }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

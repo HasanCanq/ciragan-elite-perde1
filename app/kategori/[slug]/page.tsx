@@ -11,6 +11,9 @@ import {
 import { getProductsByCategory } from "@/lib/actions";
 import CategoryClient from "@/components/shop/CategoryClient";
 import type { Metadata } from "next";
+import { JsonLd }                                    from "@/components/seo/JsonLd";
+import { buildBreadcrumbSchema, buildItemListSchema } from "@/lib/seo/schemas";
+import { buildCategoryMetadata }                     from "@/lib/seo/metadata";
 
 export async function generateStaticParams() {
   const slugs = await getAllCategorySlugsPublic();
@@ -28,21 +31,9 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   const { slug } = await params;
   const category = await getCategoryPublic(slug);
 
-  if (!category) return { title: "Kategori Bulunamadı | Çırağan Elite Perde" };
+  if (!category) return { title: "Kategori Bulunamadı | Hanedan" };
 
-  return {
-    title: `${category.name} | Çırağan Elite Perde`,
-    description:
-      category.description ||
-      `${category.name} kategorisindeki tüm ürünleri keşfedin. Çırağan Elite Perde'de kaliteli perde modelleri.`,
-    openGraph: {
-      title: `${category.name} | Çırağan Elite Perde`,
-      description:
-        category.description ||
-        `${category.name} kategorisindeki tüm ürünleri keşfedin.`,
-      images: category.image_url ? [category.image_url] : [],
-    },
-  };
+  return buildCategoryMetadata(category);
 }
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
@@ -62,11 +53,42 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       ? productsResponse.data
       : [];
 
+  // ─── JSON-LD şemaları ──────────────────────────────────────────
+  // BreadcrumbList → Google'ın breadcrumb rich result'ı
+  // ItemList → Kategori sayfasında ürün listesi yapısal verisi
+
+  const breadcrumbs = [
+    { label: "Anasayfa",   href: "/" },
+    { label: "Koleksiyon", href: "/kategori/tum-urunler" },
+  ];
+
+  const breadcrumbSchema = buildBreadcrumbSchema(breadcrumbs, category.name);
+
+  // Tüm ürünleri ItemList'e ekle (ilk 50 ile sınırla — şema boyutunu kontrol altında tut)
+  const itemListSchema = buildItemListSchema(
+    allProducts.slice(0, 50).map((p) => ({
+      name:      p.name,
+      slug:      p.slug,
+      images:    p.images ?? [],
+      base_price: p.base_price,
+      in_stock:  p.in_stock,
+    })),
+    `${category.name} Koleksiyonu`,
+  );
+
   return (
-    <CategoryClient
-      category={category}
-      categories={categories}
-      allProducts={allProducts}
-    />
+    <>
+      {/* ── JSON-LD: BreadcrumbList (SSR) ─────────────────────────── */}
+      <JsonLd data={breadcrumbSchema} />
+
+      {/* ── JSON-LD: ItemList — kategori ürün listesi (SSR) ─────────── */}
+      {allProducts.length > 0 && <JsonLd data={itemListSchema} />}
+
+      <CategoryClient
+        category={category}
+        categories={categories}
+        allProducts={allProducts}
+      />
+    </>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ChevronRight,
@@ -23,11 +22,12 @@ import {
   Star,
 } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
-import { placeOrder, validateOrder, getServerCalculatedPrices, type CheckoutFormInput } from '@/lib/actions/checkout';
+import { validateOrder, getServerCalculatedPrices, type CheckoutFormInput } from '@/lib/actions/checkout';
 import { initiateCheckoutFormPayment } from '@/lib/actions/payment';
 import { syncCart } from '@/lib/actions/cart';
+import IyzicoCheckoutForm from '@/components/payment/IyzicoCheckoutForm';
 import { formatPrice } from '@/lib/utils';
-import { PILE_LABELS_UPPER, SHIPPING, type CheckoutFormData } from '@/types';
+import { PILE_LABELS_UPPER, SHIPPING } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 import { CITY_NAMES, getDistricts } from '@/lib/data/turkey-cities';
 
@@ -102,7 +102,6 @@ const DOC_LABELS: Record<string, string> = {
 // ── Bileşen ───────────────────────────────────────────────────────────────────
 
 export default function CheckoutPage() {
-  const router   = useRouter();
   const supabase = createClient();
 
   const [mounted, setMounted]             = useState(false);
@@ -112,9 +111,16 @@ export default function CheckoutPage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isAuthenticated, setIsAuthenticated]   = useState<boolean | null>(null);
 
+  // Iyzico gömülü form state'i
+  const [paymentStep, setPaymentStep] = useState<'form' | 'payment'>('form');
+  const [iyzicoData, setIyzicoData]   = useState<{
+    checkoutFormContent: string;
+    paymentPageUrl:      string;
+    orderNumber:         string;
+  } | null>(null);
+
   // Sepet
   const items          = useCartStore((s) => s.items);
-  const clearCart      = useCartStore((s) => s.clearCart);
   const getCartSummary = useCartStore((s) => s.getCartSummary);
 
   // Server fiyatları
@@ -137,7 +143,7 @@ export default function CheckoutPage() {
   const [billing, setBilling]         = useState<AddressForm>(emptyAddress());
   const [billingExtra, setBillingExtra] = useState<BillingExtra>(emptyBillingExtra());
   const [customerNote, setCustomerNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash_on_delivery' | 'credit_card'>('bank_transfer');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card'>('credit_card');
 
   // İlçe listeleri (cascade)
   const [shippingDistricts, setShippingDistricts] = useState<string[]>([]);
@@ -305,16 +311,26 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      if (validationErrors.length > 0) {
-        setError(`Sipariş doğrulama hatası: ${validationErrors.join(', ')}`);
-        setIsLoading(false);
-        return;
-      }
-
+      // 1. Yasal belgeler
       const allDocIds = legalDocs.map((d) => d.id);
       const allChecked = allDocIds.every((id) => checkedDocIds.has(id));
       if (legalDocs.length > 0 && !allChecked) {
         setError('Devam etmek için tüm yasal belgeleri onaylamanız gerekmektedir.');
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Gerçek zamanlı stok/fiyat doğrulama — Iyzico'ya istek atılmadan anlık DB kontrolü
+      //    Sayfa yüklenirken çalışan validateOrder sonucu bayatlamış olabilir;
+      //    "Ödeme Yap" anında taze veri ile doğrulama zorunludur.
+      const freshValidation = await validateOrder(items);
+      if (!freshValidation.success) {
+        throw new Error(freshValidation.error || 'Doğrulama başarısız');
+      }
+      if (freshValidation.data && !freshValidation.data.valid) {
+        const errors = freshValidation.data.errors;
+        setValidationErrors(errors);
+        setError(`Stok/fiyat hatası: ${errors.join(' · ')}`);
         setIsLoading(false);
         return;
       }
@@ -353,48 +369,21 @@ export default function CheckoutPage() {
         legalConsent:  { documentVersionIds: allDocIds },
       };
 
-      if (paymentMethod === 'credit_card') {
-        // Uyumluluk katmanı — payment.ts eski tipi kullanıyor
-        const legacyFormData: CheckoutFormData = {
-          email,
-          fullName:        `${shipping.firstName} ${shipping.lastName}`.trim(),
-          phone:           shipping.phone,
-          shippingAddress: [
-            shipping.addressLine,
-            shipping.neighbourhood,
-            shipping.district,
-            shipping.city,
-            shipping.postalCode,
-          ].filter(Boolean).join(', '),
-          billingAddress: sameAsBilling ? undefined : [
-            billing.addressLine,
-            billing.neighbourhood,
-            billing.district,
-            billing.city,
-            billing.postalCode,
-          ].filter(Boolean).join(', '),
-          sameAsBilling,
-          customerNote,
-          paymentMethod: 'credit_card',
-        };
-
-        const result = await initiateCheckoutFormPayment(items, legacyFormData);
-        if (!result.success || !result.data) {
-          throw new Error(result.error || 'Ödeme başlatılamadı');
-        }
-        document.open();
-        document.write(result.data.checkoutFormContent);
-        document.close();
-        return;
-      }
-
-      const result = await placeOrder(items, formInput);
+      // 3. Ödeme başlat — tek standart pipeline: Iyzico Checkout Form
+      const result = await initiateCheckoutFormPayment(items, formInput);
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'Sipariş oluşturulamadı');
+        throw new Error(result.error || 'Ödeme başlatılamadı');
       }
 
-      clearCart();
-      router.push(`/odeme/basarili?order=${result.data.orderNumber}`);
+      // Iyzico form HTML'ini gömülü olarak render et — document.write YOK
+      setIyzicoData({
+        checkoutFormContent: result.data.checkoutFormContent,
+        paymentPageUrl:      result.data.paymentPageUrl,
+        orderNumber:         result.data.orderNumber,
+      });
+      setPaymentStep('payment');
+      setIsLoading(false);
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bir hata oluştu. Lütfen tekrar deneyin.');
       setIsLoading(false);
@@ -465,6 +454,26 @@ export default function CheckoutPage() {
   const selectClass  = 'h-input appearance-none cursor-pointer pr-8 bg-white';
   const sectionClass = 'border border-[#F3F4F6] p-6 bg-white';
   const labelClass   = 'block text-[8px] text-[#9CA3AF] tracking-[0.2em] uppercase mb-2';
+
+  // ── Iyzico gömülü form adımı ─────────────────────────────────────────────
+  if (paymentStep === 'payment' && iyzicoData) {
+    return (
+      <div className="bg-white min-h-screen">
+        <div className="h-container py-10 lg:py-16 max-w-[680px]">
+          <IyzicoCheckoutForm
+            checkoutFormContent={iyzicoData.checkoutFormContent}
+            paymentPageUrl={iyzicoData.paymentPageUrl}
+            orderNumber={iyzicoData.orderNumber}
+            onCancel={() => {
+              setPaymentStep('form');
+              setIyzicoData(null);
+              setIsLoading(false);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // ── JSX ──────────────────────────────────────────────────────────────────
   return (
@@ -876,9 +885,7 @@ export default function CheckoutPage() {
                 </h2>
                 <div className="space-y-3">
                   {[
-                    { value: 'bank_transfer',    label: 'Havale / EFT',   desc: 'Banka havalesi ile ödeme' },
-                    { value: 'cash_on_delivery', label: 'Kapıda Ödeme',  desc: 'Teslimat sırasında nakit veya kart' },
-                    { value: 'credit_card',      label: 'Kredi Kartı',   desc: '3D Secure ile güvenli ödeme' },
+                    { value: 'credit_card', label: 'Kredi Kartı', desc: '3D Secure ile güvenli ödeme' },
                   ].map((method) => (
                     <label
                       key={method.value}

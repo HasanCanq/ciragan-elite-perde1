@@ -4,9 +4,17 @@
 // IYZICO PAYMENT SERVER ACTIONS
 // PCI-DSS Uyumlu — Kart verisi ASLA sunucumuza gelmez.
 // Iyzico Checkout Form (hosted iframe) kullanılır.
+//
+// Sipariş Akışı (ACID):
+//   1. Zod validasyonu + XSS sanitizasyonu (sunucu tarafı)
+//   2. Stok + fiyat ön doğrulaması (read-only)
+//   3. place_order_atomic RPC → sipariş + kalemler + stok tek TX
+//   4. Iyzico Checkout Form başlat
+//   5. Başarısız → expire_pending_orders (service_role) ile atomik rollback
 // =====================================================
 
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import Iyzipay from 'iyzipay';
@@ -18,17 +26,29 @@ import {
 import {
   validateStock,
   validateAndCalculatePrices,
+  checkoutFormSchema,
+  type CheckoutFormInput,
 } from '@/lib/actions/checkout';
+import {
+  buildShippingSnapshot,
+  buildBillingSnapshot,
+  formatAddressText,
+} from '@/lib/actions/checkout-helpers';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { orderLimiter } from '@/lib/rate-limit';
 import {
   CartItem,
-  CheckoutFormData,
   ApiResponse,
-  OrderInsert,
-  Order,
   SHIPPING,
 } from '@/types';
+
+// Service-role client — sadece Iyzico başlatma hatasında atomik rollback için
+function getAdminSupabase() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 // =====================================================
 // PCI-DSS UYUMLU: IYZICO CHECKOUT FORM (hosted iframe)
@@ -38,7 +58,7 @@ import {
 export interface CheckoutFormResult {
   orderId: string;
   orderNumber: string;
-  /** Iyzico'nun iframe embed HTML'i — sayfada document.write ile render edilir */
+  /** Iyzico'nun iframe embed HTML'i — IyzicoCheckoutForm bileşeni tarafından DOM'a güvenli enjekte edilir */
   checkoutFormContent: string;
   /** Standalone ödeme sayfası URL'i (mobil fallback) */
   paymentPageUrl: string;
@@ -46,7 +66,7 @@ export interface CheckoutFormResult {
 
 export async function initiateCheckoutFormPayment(
   cartItems: CartItem[],
-  formData: CheckoutFormData
+  rawFormData: CheckoutFormInput
 ): Promise<ApiResponse<CheckoutFormResult>> {
   try {
     const supabase = await createClient();
@@ -70,8 +90,28 @@ export async function initiateCheckoutFormPayment(
       };
     }
 
-    // 1b. Profil: identity_number varsa kullan, yoksa Iyzico sandbox fallback
-    //     (identity_number sütunu ileride eklenecek — graceful degradation)
+    // 2. Zod validasyonu + XSS sanitizasyonu
+    //    Server Action olduğu için client'tan gelen her veri doğrulanmalıdır.
+    const parsed = checkoutFormSchema.safeParse(rawFormData);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0];
+      const fieldPath  = firstError.path.join(' → ');
+      return {
+        data:    null,
+        error:   fieldPath ? `${fieldPath}: ${firstError.message}` : firstError.message,
+        success: false,
+      };
+    }
+    const formData = parsed.data;
+
+    // 3. Adres snapshot'larını oluştur — yapısal bütünlük korunur
+    const shippingSnapshot = buildShippingSnapshot(formData.shippingAddress);
+    const effectiveBilling = formData.sameAsBilling ? null : formData.billingAddress!;
+    const billingSnapshot  = effectiveBilling ? buildBillingSnapshot(effectiveBilling) : null;
+    // Iyzico ve DB için tek kaynak: snapshot üzerinden de-structuring
+    const effectiveBillingSnapshot = billingSnapshot ?? shippingSnapshot;
+
+    // 4. Profil: identity_number varsa kullan, yoksa Iyzico sandbox fallback
     const { data: profile } = await supabase
       .from('profiles')
       .select('identity_number')
@@ -79,18 +119,18 @@ export async function initiateCheckoutFormPayment(
       .single();
     const identityNumber = (profile as any)?.identity_number?.trim() || '11111111111';
 
-    // 2. Sepet kontrolü
+    // 5. Sepet kontrolü
     if (!cartItems || cartItems.length === 0) {
       return { data: null, error: 'Sepetiniz boş', success: false };
     }
 
-    // 3. Stok kontrolü
+    // 6. Stok ön kontrolü (read-only — atomik RPC öncesi erken hata)
     const stockValidation = await validateStock(cartItems, supabase);
     if (!stockValidation.valid) {
       return { data: null, error: `Stok hatası: ${stockValidation.errors.join(', ')}`, success: false };
     }
 
-    // 4. Fiyat doğrulama (server-side)
+    // 7. Fiyat doğrulama (server-side — motor pipeline)
     const priceValidation = await validateAndCalculatePrices(cartItems, supabase);
     if (!priceValidation.valid) {
       return { data: null, error: `Fiyat hatası: ${priceValidation.errors.join(', ')}`, success: false };
@@ -98,197 +138,180 @@ export async function initiateCheckoutFormPayment(
 
     const { serverCalculatedItems, serverSubtotal } = priceValidation;
     const shippingCost = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
-    const totalAmount = Math.round((serverSubtotal + shippingCost) * 100) / 100;
+    const totalAmount  = Math.round((serverSubtotal + shippingCost) * 100) / 100;
 
-    // 5. Stok düş
-    for (const item of cartItems) {
-      const { error: stockError } = await supabase.rpc('check_and_deduct_stock', {
-        p_product_id: item.productId,
-        p_quantity: item.quantity,
-      });
-      if (stockError) {
-        return { data: null, error: `Stok güncellenemedi: ${item.productName}`, success: false };
-      }
-    }
+    // 8. place_order_atomic için kalem listesi
+    //    stock_deduct_m2 = area_m2 * pile_coefficient * quantity
+    //    expire_pending_orders (migration 016) aynı formülü ile restore eder.
+    const rpcItems = serverCalculatedItems.map((item) => ({
+      product_id:                item.product_id,
+      product_name:              item.product_name,
+      product_slug:              item.product_slug,
+      product_image:             item.product_image ?? null,
+      width_cm:                  item.width_cm,
+      height_cm:                 item.height_cm,
+      pile_factor:               item.pile_factor,
+      pleat_ratio_id:            item.pleat_ratio_id,
+      pleat_name_snapshot:       item.pleat_name_snapshot,
+      mechanism_direction:       item.mechanism_direction ?? null,
+      calculation_type_snapshot: item.calculation_type_snapshot,
+      area_m2:                   item.area_m2,
+      price_per_m2_snapshot:     item.price_per_m2_snapshot,
+      pile_coefficient:          item.pile_coefficient,
+      quantity:                  item.quantity ?? 1,
+      unit_price:                item.unit_price,
+      total_price:               item.total_price,
+      stock_deduct_m2: Math.round(
+        item.area_m2 * item.pile_coefficient * (item.quantity ?? 1) * 1000
+      ) / 1000,
+    }));
 
-    // 6. Sipariş oluştur (PENDING)
-    const orderData: OrderInsert = {
-      user_id: user.id,
-      customer_email: formData.email,
-      customer_name: formData.fullName,
-      customer_phone: formData.phone || null,
-      shipping_address: formData.shippingAddress,
-      billing_address: formData.sameAsBilling
-        ? formData.shippingAddress
-        : formData.billingAddress || formData.shippingAddress,
-      subtotal: serverSubtotal,
-      shipping_cost: shippingCost,
-      discount_amount: 0,
-      total_amount: totalAmount,
-      status: 'PENDING',
-      customer_note: formData.customerNote || null,
-      payment_method: 'credit_card',
+    const rpcPayload = {
+      user_id:          user.id,
+      customer_email:   formData.email,
+      customer_name:    shippingSnapshot.fullName,
+      customer_phone:   shippingSnapshot.phone,
+      // DB TEXT kolonlar — kargo etiketi ve legacy okuma için
+      shipping_address: formatAddressText(shippingSnapshot),
+      billing_address:  billingSnapshot ? formatAddressText(billingSnapshot) : null,
+      subtotal:         serverSubtotal,
+      shipping_cost:    shippingCost,
+      discount_amount:  0,
+      total_amount:     totalAmount,
+      payment_method:   'credit_card',
+      customer_note:    formData.customerNote || null,
+      items:            rpcItems,
     };
 
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert(orderData)
-      .select()
-      .single();
+    logPaymentEvent(supabase, {
+      user_id:         user.id,
+      event_type:      'PAYMENT_INITIATED',
+      expected_amount: totalAmount,
+      currency:        'TRY',
+      ip_address:      ip,
+    });
 
-    if (orderError || !order) {
-      await restoreStock(supabase, cartItems);
-      return { data: null, error: 'Sipariş oluşturulamadı', success: false };
+    // 9. Atomik sipariş oluştur — sipariş + kalemler + stok düşme tek TX
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc('place_order_atomic', { p_payload: rpcPayload });
+
+    if (rpcError || !rpcResult?.success) {
+      const errMsg = rpcResult?.error ?? rpcError?.message ?? 'Sipariş oluşturulamadı';
+      console.error('[initiateCheckoutFormPayment] place_order_atomic hatası:', errMsg);
+      return { data: null, error: errMsg, success: false };
     }
 
-    // 7. Sipariş kalemleri
-    const { error: itemsError } = await supabase
-      .from('order_items')
-      .insert(serverCalculatedItems.map(item => ({ ...item, order_id: order.id })));
+    const orderId     = rpcResult.order_id     as string;
+    const orderNumber = rpcResult.order_number  as string;
 
-    if (itemsError) {
-      await supabase.from('orders').delete().eq('id', order.id);
-      await restoreStock(supabase, cartItems);
-      return { data: null, error: 'Sipariş detayları kaydedilemedi', success: false };
-    }
-
-    // 8. Iyzico Checkout Form başlat — KARTSİZ istek
+    // 10. Iyzico Checkout Form başlat — KARTSİZ istek
+    //     Adres alanları snapshot üzerinden de-structuring ile dinamik doldurulur.
+    //     Sabit 'Istanbul' YOK — kullanıcının girdiği il/ilçe/posta kodu kullanılır.
     const callbackUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/callback`;
+
     const basketItems: IyzicoBasketItem[] = serverCalculatedItems.map((item, idx) => ({
-      id: item.product_id || `item-${idx}`,
-      name: item.product_name,
+      id:        item.product_id || `item-${idx}`,
+      name:      item.product_name,
       category1: 'Perde',
-      itemType: 'PHYSICAL' as const,
-      price: item.total_price.toFixed(2),
+      itemType:  'PHYSICAL' as const,
+      price:     item.total_price.toFixed(2),
     }));
 
     if (shippingCost > 0) {
-      basketItems.push({ id: 'shipping', name: 'Kargo Ücreti', category1: 'Kargo', itemType: 'PHYSICAL', price: shippingCost.toFixed(2) });
+      basketItems.push({
+        id: 'shipping', name: 'Kargo Ücreti', category1: 'Kargo',
+        itemType: 'PHYSICAL', price: shippingCost.toFixed(2),
+      });
     }
 
-    const nameParts = formData.fullName.trim().split(/\s+/);
-    const firstName = nameParts[0] || formData.fullName;
-    const lastName = nameParts.slice(1).join(' ') || formData.fullName;
-
     const checkoutRequest: IyzicoCheckoutFormRequest = {
-      locale: Iyzipay.LOCALE.TR,
-      conversationId: order.id,
-      price: serverSubtotal.toFixed(2),
-      paidPrice: totalAmount.toFixed(2),
-      currency: Iyzipay.CURRENCY.TRY,
-      basketId: order.order_number,
-      paymentChannel: Iyzipay.PAYMENT_CHANNEL.WEB,
-      paymentGroup: Iyzipay.PAYMENT_GROUP.PRODUCT,
+      locale:              Iyzipay.LOCALE.TR,
+      conversationId:      orderId,
+      price:               serverSubtotal.toFixed(2),
+      paidPrice:           totalAmount.toFixed(2),
+      currency:            Iyzipay.CURRENCY.TRY,
+      basketId:            orderNumber,
+      paymentChannel:      Iyzipay.PAYMENT_CHANNEL.WEB,
+      paymentGroup:        Iyzipay.PAYMENT_GROUP.PRODUCT,
       callbackUrl,
       enabledInstallments: ['1', '2', '3', '6', '9'],
       buyer: {
-        id: user.id,
-        name: firstName,
-        surname: lastName,
-        gsmNumber: formData.phone ? `+90${formData.phone.replace(/\D/g, '').slice(-10)}` : undefined,
-        email: formData.email,
-        identityNumber, // profiles.identity_number → fallback: '11111111111'
-        registrationAddress: formData.shippingAddress,
+        id:                  user.id,
+        name:                shippingSnapshot.firstName,
+        surname:             shippingSnapshot.lastName,
+        gsmNumber:           shippingSnapshot.phone
+          ? `+90${shippingSnapshot.phone.replace(/\D/g, '').slice(-10)}`
+          : undefined,
+        email:               formData.email,
+        identityNumber,
+        registrationAddress: formatAddressText(shippingSnapshot),
         ip,
-        city: 'Istanbul',
-        country: 'Turkey',
+        city:                shippingSnapshot.city,
+        country:             'Turkey',
       },
-      shippingAddress: { contactName: formData.fullName, city: 'Istanbul', country: 'Turkey', address: formData.shippingAddress },
+      shippingAddress: {
+        contactName: shippingSnapshot.fullName,
+        city:        shippingSnapshot.city,
+        country:     'Turkey',
+        address:     formatAddressText(shippingSnapshot),
+      },
       billingAddress: {
-        contactName: formData.fullName,
-        city: 'Istanbul',
-        country: 'Turkey',
-        address: formData.sameAsBilling ? formData.shippingAddress : formData.billingAddress || formData.shippingAddress,
+        contactName: effectiveBillingSnapshot.fullName,
+        city:        effectiveBillingSnapshot.city,
+        country:     'Turkey',
+        address:     formatAddressText(effectiveBillingSnapshot),
       },
       basketItems,
     };
 
-    logPaymentEvent(supabase, {
-      order_id: order.id,
-      user_id: user.id,
-      event_type: 'PAYMENT_INITIATED',
-      conversation_id: order.id,
-      expected_amount: totalAmount,
-      currency: 'TRY',
-      ip_address: ip,
-    });
-
     const formResult = await checkoutFormInitialize(checkoutRequest);
 
     if (formResult.status !== 'success') {
-      await restoreStockAndCancelOrder(supabase, order.id, cartItems);
+      // Iyzico formu başlatılamadı — atomik rollback: stok iade + sipariş iptal
+      const adminSupabase = getAdminSupabase();
+      await adminSupabase.rpc('expire_pending_orders', { p_order_ids: [orderId] });
+
       logPaymentEvent(supabase, {
-        order_id: order.id,
-        user_id: user.id,
-        event_type: 'THREEDS_INIT_FAILED',
-        conversation_id: order.id,
-        error_code: formResult.errorCode,
-        error_message: formResult.errorMessage,
+        order_id:        orderId,
+        user_id:         user.id,
+        event_type:      'THREEDS_INIT_FAILED',
+        conversation_id: orderId,
+        error_code:      formResult.errorCode,
+        error_message:   formResult.errorMessage,
         expected_amount: totalAmount,
-        ip_address: ip,
+        ip_address:      ip,
       });
+
       return { data: null, error: formResult.errorMessage || 'Ödeme formu başlatılamadı', success: false };
     }
 
     logPaymentEvent(supabase, {
-      order_id: order.id,
-      user_id: user.id,
-      event_type: 'THREEDS_INIT_SUCCESS',
-      conversation_id: order.id,
+      order_id:        orderId,
+      user_id:         user.id,
+      event_type:      'THREEDS_INIT_SUCCESS',
+      conversation_id: orderId,
       expected_amount: totalAmount,
-      ip_address: ip,
+      ip_address:      ip,
     });
 
     revalidatePath('/admin/orders');
 
     return {
       data: {
-        orderId: order.id,
-        orderNumber: order.order_number,
+        orderId,
+        orderNumber,
         checkoutFormContent: formResult.checkoutFormContent,
-        paymentPageUrl: formResult.paymentPageUrl,
+        paymentPageUrl:      formResult.paymentPageUrl,
       },
-      error: null,
+      error:   null,
       success: true,
     };
   } catch (error) {
     console.error('initiateCheckoutFormPayment error:', error);
     return {
-      data: null,
-      error: error instanceof Error ? error.message : 'Ödeme işlemi başarısız',
+      data:    null,
+      error:   error instanceof Error ? error.message : 'Ödeme işlemi başarısız',
       success: false,
     };
   }
-}
-
-// =====================================================
-// YARDIMCI FONKSİYONLAR
-// =====================================================
-
-async function restoreStock(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  cartItems: CartItem[]
-) {
-  for (const item of cartItems) {
-    await supabase.rpc('restore_stock', {
-      p_product_id: item.productId,
-      p_quantity: item.quantity,
-    });
-  }
-}
-
-async function restoreStockAndCancelOrder(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  orderId: string,
-  cartItems: CartItem[]
-) {
-  await restoreStock(supabase, cartItems);
-  await supabase
-    .from('orders')
-    .update({
-      status: 'CANCELLED',
-      admin_note: 'Ödeme başlatılamadı - otomatik iptal',
-    })
-    .eq('id', orderId)
-    .eq('status', 'PENDING');
 }

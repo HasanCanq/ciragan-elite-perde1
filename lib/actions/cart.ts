@@ -116,8 +116,8 @@ async function validateCartItems(
       heightCm:        item.height,
       quantity:        item.quantity,
       pleat:           calcType === 'mt' ? pleatMap.get(item.pleatId!) : undefined,
-      minWidthCm:      product.min_width_cm ?? null,
-      minAreaM2:       product.min_area_m2  ?? null,
+      minWidthCm:      product.min_width_cm ?? undefined,
+      minAreaM2:       product.min_area_m2  ?? undefined,
     });
 
     if (result.ok) valid.push(item);

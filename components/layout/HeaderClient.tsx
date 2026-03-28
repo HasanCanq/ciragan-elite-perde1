@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Search, User, ShoppingBag, Menu, X } from 'lucide-react';
-import { useCartTotalItems } from '@/store/cartStore';
+import { useCartStore } from '@/store/cartStore';
+import { useCartTotalItems } from '@/hooks/useCart';
 
 export interface NavItem {
   label: string;
@@ -32,7 +33,8 @@ function DesktopNavLink({ label, href }: NavItem) {
 export default function HeaderClient({ navItems }: { navItems: NavItem[] }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled]  = useState(false);
-  const cartCount = useCartTotalItems();
+  const cartCount    = useCartTotalItems();
+  const toggleCart   = useCartStore((s) => s.toggleCart);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -96,8 +98,9 @@ export default function HeaderClient({ navItems }: { navItems: NavItem[] }) {
             </Link>
 
             {/* Cart with live badge */}
-            <Link
-              href="/sepet"
+            <button
+              type="button"
+              onClick={toggleCart}
               aria-label={cartCount > 0 ? `Sepet, ${cartCount} ürün` : 'Sepet'}
               className="relative p-2.5 text-black hover:text-[#B89947] transition-colors duration-200"
             >
@@ -116,7 +119,7 @@ export default function HeaderClient({ navItems }: { navItems: NavItem[] }) {
                   {cartCount}
                 </span>
               )}
-            </Link>
+            </button>
 
             {/* Hamburger */}
             <button

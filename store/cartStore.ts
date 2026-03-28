@@ -92,10 +92,10 @@ export const useCartStore = create<CartState>()(
               priceToken:     item.priceToken     || updatedItems[existingIndex].priceToken,
               tokenExpiresAt: item.tokenExpiresAt || updatedItems[existingIndex].tokenExpiresAt,
             };
-            return { items: updatedItems };
+            return { items: updatedItems, isOpen: true };
           }
 
-          return { items: [...state.items, item] };
+          return { items: [...state.items, item], isOpen: true };
         });
 
         return true;
@@ -224,35 +224,5 @@ export const useCartStore = create<CartState>()(
 );
 
 
-export const useCartItems        = () => useCartStore((state) => state.items);
-export const useCartIsOpen       = () => useCartStore((state) => state.isOpen);
-export const useCartItemCount    = () => useCartStore((state) => state.items.length);
-export const useCartTotalItems   = () =>
-  useCartStore((state) => state.items.reduce((sum, item) => sum + item.quantity, 0));
-
-// Token yönetimi hook'ları (checkout sayfasında kullanılır)
-/** Sepette süresi dolmuş gerçek tokenı olan kalem var mı? */
-export const useHasStaleTokens   = () => useCartStore((state) => state.hasStaleTokens());
-/** Belirli bir kalemin token'ını yenile (engine API çağrısı sonrası). */
-export const useRefreshToken     = () => useCartStore((state) => state.refreshToken);
-/** Süresi dolmuş kalemleri temizle (checkout öncesi kullanılabilir). */
-export const usePurgeStaleItems  = () => useCartStore((state) => state.purgeStaleItems);
-/** Kaç dakika kaldığını döner (TOKEN_TTL_MS'ten türetilir). */
-export function useTokenMinutesLeft(expiresAt: number): number {
-  const remaining = expiresAt - Date.now();
-  return remaining > 0 ? Math.floor(remaining / 60_000) : 0;
-}
-
-
-export function useCartHydration() {
-  const [hydrated, setHydrated] = React.useState(false);
-
-  React.useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  return hydrated;
-}
-
-
-import * as React from 'react';
+// Selector hook'lar ve useCartHydration → @/hooks/useCart
+// React lifecycle'a bağımlı hook'lar store tanımından ayrı tutulur (SoC).
