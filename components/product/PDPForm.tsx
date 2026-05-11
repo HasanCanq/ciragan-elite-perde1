@@ -25,81 +25,29 @@ export type AccordionItem = {
 }
 
 export type PDPFormProps = {
-  colors:             Color[]
-  accordions:         AccordionItem[]
+  colors:              Color[]
+  accordions:          AccordionItem[]
+  fabricProperties:    string[]
   measurementSection?: React.ReactNode
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   KUMAŞ ÖZELLİK İKONLARI — sıfır bağımlılık, saf inline SVG
-   ══════════════════════════════════════════════════════════════════════════ */
+/* ── Kumaş özellikleri (metin pill'leri — DB'den dinamik) ───────────────── */
+function FabricProperties({ items }: { items: string[] }) {
+  if (items.length === 0) return null
 
-const FabricIcon = () => (
-  <svg width="13" height="12" viewBox="0 0 13 12" fill="none" aria-hidden="true">
-    <path d="M1 2.5 Q3.25 0.5 6.5 2.5 Q9.75 4.5 12 2.5"  stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-    <path d="M1 6   Q3.25 4   6.5 6   Q9.75 8   12 6"     stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-    <path d="M1 9.5 Q3.25 7.5 6.5 9.5 Q9.75 11.5 12 9.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-  </svg>
-)
-
-const LightBlockIcon = () => (
-  <svg width="11" height="14" viewBox="0 0 11 14" fill="none" aria-hidden="true">
-    <rect x="0.5" y="0.5" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1"/>
-    <line x1="2.75" y1="3.5" x2="2.75" y2="10.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-    <line x1="5.5"  y1="2.5" x2="5.5"  y2="11.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-    <line x1="8.25" y1="3.5" x2="8.25" y2="10.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-  </svg>
-)
-
-const WashIcon = () => (
-  <svg width="12" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-    <path
-      d="M6 1 C6 1 11 7.5 11 10 A5 5 0 0 1 1 10 C1 7.5 6 1 6 1Z"
-      stroke="currentColor"
-      strokeWidth="1"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
-const EcoIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-    <path
-      d="M2.5 11.5 Q2.5 3.5 11 1.5 Q11 9.5 2.5 11.5Z"
-      stroke="currentColor"
-      strokeWidth="1"
-      strokeLinejoin="round"
-    />
-    <line x1="2.5" y1="11.5" x2="7" y2="7" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
-  </svg>
-)
-
-type FabricProp = { icon: React.ReactNode; label: string }
-
-/* Kumaş özellikleri — ileride DB'den props olarak alınabilir */
-const FABRIC_PROPS: FabricProp[] = [
-  { icon: <FabricIcon />,    label: 'Linen %60 · Pamuk %40' },
-  { icon: <LightBlockIcon />, label: 'Işık Filtreleyici'     },
-  { icon: <WashIcon />,      label: '30°C Yıkanabilir'       },
-  { icon: <EcoIcon />,       label: 'OEKO-TEX Sertifikalı'  },
-]
-
-/* ── Kumaş özellikleri (ikon pill'leri) ─────────────────────────────────── */
-function FabricProperties() {
   return (
     <div className="border-t border-[#F3F4F6] pt-5">
       <div className="flex flex-wrap gap-2">
-        {FABRIC_PROPS.map(({ icon, label }) => (
+        {items.map((label) => (
           <span
             key={label}
             className={[
-              'inline-flex items-center gap-[7px]',
+              'inline-flex items-center',
               'px-3 py-[7px]',
               'border border-[#EBEBEB]',
               'text-[10px] tracking-[0.05em] text-[#6B7280]',
             ].join(' ')}
           >
-            <span className="text-[#B89947] flex-shrink-0">{icon}</span>
             {label}
           </span>
         ))}
@@ -209,13 +157,14 @@ function ColorSwatches({ colors }: { colors: Color[] }) {
 export default function PDPForm({
   colors,
   accordions,
+  fabricProperties,
   measurementSection,
 }: PDPFormProps) {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* ── 1. Kumaş özellikleri (ikon pill'leri) ─────────────────── */}
-      <FabricProperties />
+      {/* ── 1. Kumaş özellikleri (metin pill'leri) ────────────────── */}
+      <FabricProperties items={fabricProperties} />
 
       {/* ── 3. Renk seçici (swatch'lar) ───────────────────────────── */}
       {colors.length > 0 && <ColorSwatches colors={colors} />}

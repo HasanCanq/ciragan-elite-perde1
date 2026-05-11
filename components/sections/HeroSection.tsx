@@ -30,7 +30,7 @@ export default function HeroSection() {
       >
         {/* Eyebrow */}
         <p className="h-eyebrow mb-7">
-          Yeni Koleksiyon&nbsp;&nbsp;·&nbsp;&nbsp;2025
+          Yeni Koleksiyon&nbsp;&nbsp;·&nbsp;&nbsp;2026
         </p>
 
         {/* Display heading — Cormorant Garamond, weight 300
@@ -125,7 +125,7 @@ export default function HeroSection() {
               'border border-white/20',
             ].join(' ')}
           >
-            Keten Tül Koleksiyonu
+            HANEDAN PERDE
           </span>
         </div>
 

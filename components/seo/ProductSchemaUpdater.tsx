@@ -1,48 +1,5 @@
 'use client'
 
-/**
- * components/seo/ProductSchemaUpdater.tsx
- * ─────────────────────────────────────────────────────────────────────────────
- * MeasurementForm'dan gelen fiyat değişikliklerini dinler ve JSON-LD
- * şemasındaki price değerini canlı olarak günceller.
- *
- * ─── Akış ────────────────────────────────────────────────────────────────────
- *
- *  [MeasurementForm]                [ProductSchemaUpdater]
- *       │                                   │
- *       │ /api/engine/calculate OK          │
- *       │ → window.dispatchEvent(           │
- *       │     new CustomEvent(              │
- *       │       'seo:price-update',         │
- *       │       { detail: { price } }       │
- *       │     )                             │
- *       │   )                               │
- *       │                                   │
- *       │ ──── CustomEvent ───────────────> │
- *       │                                   │ getElementById('product-ld-json')
- *       │                                   │ JSON.parse → schema.offers.price = price
- *       │                                   │ script.textContent = JSON.stringify
- *       │                                   │
- *
- * ─── Bot vs Kullanıcı ────────────────────────────────────────────────────────
- *
- *  Googlebot (JS çalıştırmaz):
- *    SSR anında render edilen base_price'ı görür. Bu, Google'ın "starting from"
- *    fiyat rich snippet'i için yeterlidir.
- *
- *  Kullanıcı (JS çalışır):
- *    Ölçü girip pile seçince fiyat hesaplanır, CustomEvent tetiklenir ve
- *    JSON-LD'deki price anlık olarak güncellenir. Bu, Chrome DevTools'da
- *    doğrulanabilir (document.getElementById('product-ld-json').textContent).
- *
- * ─── Neden ayrı Component? ───────────────────────────────────────────────────
- *
- *  JSON-LD script tag'ini Server Component olarak renderlamak,
- *  script'i HTML'e erken (SSR anında) enjekte eder — botlar için optimal.
- *  Fiyat güncelleme mantığı ayrı bir 'use client' bileşende tutulur;
- *  böylece Server Component avantajı korunur.
- * ─────────────────────────────────────────────────────────────────────────────
- */
 
 import { useEffect } from 'react'
 

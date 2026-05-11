@@ -12,6 +12,29 @@ import { createClient } from '@supabase/supabase-js';
 import { checkoutFormRetrieve } from '@/lib/iyzico';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { sendGA4PurchaseEvent, parseGaClientId } from '@/lib/analytics/ga4-server';
+// Callback route'ta user session YOK — admin client ile RPC doğrudan çağrılır.
+// SECURITY DEFINER fonksiyonları service_role yetkisiyle çalışır.
+async function confirmCouponViaAdmin(
+  adminSb: ReturnType<typeof getAdminSupabase>,
+  redemptionId: string,
+  orderId: string,
+): Promise<void> {
+  const { error } = await adminSb.rpc('confirm_coupon_redemption', {
+    p_redemption_id: redemptionId,
+    p_order_id:      orderId,
+  });
+  if (error) console.error('[Callback] Kupon onay hatası (non-fatal):', error.message);
+}
+
+async function releaseCouponViaAdmin(
+  adminSb: ReturnType<typeof getAdminSupabase>,
+  redemptionId: string,
+): Promise<void> {
+  const { error } = await adminSb.rpc('release_coupon_atomic', {
+    p_redemption_id: redemptionId,
+  });
+  if (error) console.error('[Callback] Kupon release hatası (non-fatal):', error.message);
+}
 
 function getAdminSupabase() {
   return createClient(
@@ -99,7 +122,7 @@ export async function POST(request: NextRequest) {
 
   const { data: order, error: orderError } = await supabase
     .from('orders')
-    .select('*, order_items(*)')
+    .select('*, order_items(*), redemption_id')
     .eq('id', orderId)
     .single();
 
@@ -245,8 +268,13 @@ export async function POST(request: NextRequest) {
   }
 
   // ==========================================
-  // 9. SEPETİ TEMİZLE
+  // 9. KUPON ONAYLA + SEPETİ TEMİZLE
   // ==========================================
+  if ((order as any).redemption_id) {
+    // RESERVED → CONFIRMED: kupon kalıcı olarak kullanıldı
+    await confirmCouponViaAdmin(supabase, (order as any).redemption_id, order.id);
+  }
+
   if (order.user_id) {
     await supabase.rpc('clear_user_cart', { p_user_id: order.user_id });
   }
@@ -314,7 +342,8 @@ export async function POST(request: NextRequest) {
 async function restoreStockAndCancel(
   supabase: ReturnType<typeof getAdminSupabase>,
   order: {
-    id: string;
+    id:            string;
+    redemption_id?: string | null;
     order_items?: Array<{
       product_id:      string | null;
       area_m2:         number | null;
@@ -324,6 +353,10 @@ async function restoreStockAndCancel(
   },
   reason: string
 ) {
+  // Kupon rezervasyonunu serbest bırak
+  if (order.redemption_id) {
+    await releaseCouponViaAdmin(supabase, order.redemption_id);
+  }
   for (const item of order.order_items ?? []) {
     if (!item.product_id) continue;
 

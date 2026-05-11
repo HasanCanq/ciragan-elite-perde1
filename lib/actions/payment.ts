@@ -26,9 +26,11 @@ import {
 import {
   validateStock,
   validateAndCalculatePrices,
+} from '@/lib/actions/checkout';
+import {
   checkoutFormSchema,
   type CheckoutFormInput,
-} from '@/lib/actions/checkout';
+} from '@/lib/validations/checkout';
 import {
   buildShippingSnapshot,
   buildBillingSnapshot,
@@ -36,6 +38,7 @@ import {
 } from '@/lib/actions/checkout-helpers';
 import { logPaymentEvent } from '@/lib/payment-logger';
 import { orderLimiter } from '@/lib/rate-limit';
+import { validateCoupon, redeemCoupon, releaseCouponReservation } from '@/lib/promotions/coupon-service';
 import {
   CartItem,
   ApiResponse,
@@ -65,8 +68,9 @@ export interface CheckoutFormResult {
 }
 
 export async function initiateCheckoutFormPayment(
-  cartItems: CartItem[],
-  rawFormData: CheckoutFormInput
+  cartItems:   CartItem[],
+  rawFormData: CheckoutFormInput,
+  couponCode?: string,
 ): Promise<ApiResponse<CheckoutFormResult>> {
   try {
     const supabase = await createClient();
@@ -76,12 +80,24 @@ export async function initiateCheckoutFormPayment(
       headersList.get('x-real-ip') ||
       '127.0.0.1';
 
-    // 1. Kullanıcı doğrulama
+    // 1. Kullanıcı doğrulama — misafir (guest) modu desteklenir
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { data: null, error: 'Giriş yapmanız gerekiyor', success: false };
+    const isGuest = (rawFormData as any).isGuest === true;
 
-    // 1a. Sipariş rate limit — aynı hesap max 5 ödeme girişimi / dakika
-    const rateCheck = await orderLimiter.limit(`checkout:${user.id}`);
+    if (!user && !isGuest) {
+      return { data: null, error: 'Giriş yapmanız gerekiyor', success: false };
+    }
+
+    // Misafir işlemleri için service_role client (RLS bypass — güvenli)
+    // Üye işlemleri için session-authenticated supabase client
+    const adminDb = getAdminSupabase();
+    const dbClient = isGuest ? adminDb : supabase;
+
+    // 1a. Sipariş rate limit — üye: userId, misafir: IP bazlı
+    const rateLimitKey = user
+      ? `checkout:${user.id}`
+      : `checkout:guest:${ip}`;
+    const rateCheck = await orderLimiter.limit(rateLimitKey);
     if (!rateCheck.success) {
       return {
         data: null,
@@ -91,7 +107,7 @@ export async function initiateCheckoutFormPayment(
     }
 
     // 2. Zod validasyonu + XSS sanitizasyonu
-    //    Server Action olduğu için client'tan gelen her veri doğrulanmalıdır.
+    //    isGuest alanı Zod şemasında tanımlı değil; safeParse otomatik strip eder.
     const parsed = checkoutFormSchema.safeParse(rawFormData);
     if (!parsed.success) {
       const firstError = parsed.error.issues[0];
@@ -111,13 +127,16 @@ export async function initiateCheckoutFormPayment(
     // Iyzico ve DB için tek kaynak: snapshot üzerinden de-structuring
     const effectiveBillingSnapshot = billingSnapshot ?? shippingSnapshot;
 
-    // 4. Profil: identity_number varsa kullan, yoksa Iyzico sandbox fallback
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('identity_number')
-      .eq('id', user.id)
-      .single();
-    const identityNumber = (profile as any)?.identity_number?.trim() || '11111111111';
+    // 4. Profil: identity_number — misafirde profil yok, Iyzico sandbox fallback
+    let identityNumber = '11111111111';
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('identity_number')
+        .eq('id', user.id)
+        .single();
+      identityNumber = (profile as any)?.identity_number?.trim() || '11111111111';
+    }
 
     // 5. Sepet kontrolü
     if (!cartItems || cartItems.length === 0) {
@@ -125,6 +144,7 @@ export async function initiateCheckoutFormPayment(
     }
 
     // 6. Stok ön kontrolü (read-only — atomik RPC öncesi erken hata)
+    //    Misafir için de aynı supabase client (anon) çalışır; read-only RLS açık
     const stockValidation = await validateStock(cartItems, supabase);
     if (!stockValidation.valid) {
       return { data: null, error: `Stok hatası: ${stockValidation.errors.join(', ')}`, success: false };
@@ -137,8 +157,56 @@ export async function initiateCheckoutFormPayment(
     }
 
     const { serverCalculatedItems, serverSubtotal } = priceValidation;
-    const shippingCost = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
-    const totalAmount  = Math.round((serverSubtotal + shippingCost) * 100) / 100;
+
+    // 7.5. Kupon doğrulama (server-side re-validation — atomic RPC öncesi)
+    let couponId:           string | null = null;
+    let discountAmount:     number        = 0;
+    let appliedSegment:     string | null = null;
+    let couponCodeSnapshot: string | null = null;
+
+    if (couponCode?.trim()) {
+      // Misafir kullanıcılar kupon kullanamaz — üye girişi gerektirir
+      if (isGuest) {
+        return {
+          data:  null,
+          error: 'Kupon kodu kullanmak için üye girişi yapmanız gerekmektedir.',
+          success: false,
+        };
+      }
+
+      const normalizedCode = couponCode.trim().toUpperCase();
+
+      const [profileResult, orderCountResult] = await Promise.all([
+        supabase.from('profiles').select('segment').eq('id', user!.id).single(),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .neq('status', 'CANCELLED'),
+      ]);
+
+      const couponResult = await validateCoupon({
+        code:         normalizedCode,
+        subtotal:     serverSubtotal,
+        userId:       user!.id,
+        userSegment:  (profileResult.data as any)?.segment ?? null,
+        ipAddress:    ip,
+        isFirstOrder: (orderCountResult.count ?? 0) === 0,
+      });
+
+      if (!couponResult.valid) {
+        return { data: null, error: `Kupon hatası: ${couponResult.errorMessage}`, success: false };
+      }
+
+      couponId           = couponResult.couponId;
+      discountAmount     = Math.min(couponResult.discountAmount, serverSubtotal);
+      appliedSegment     = couponResult.appliedSegment;
+      couponCodeSnapshot = normalizedCode;
+    }
+
+    const shippingCost       = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
+    const discountedSubtotal = Math.round((serverSubtotal - discountAmount) * 100) / 100;
+    const totalAmount        = Math.round((discountedSubtotal + shippingCost) * 100) / 100;
 
     // 8. place_order_atomic için kalem listesi
     //    stock_deduct_m2 = area_m2 * pile_coefficient * quantity
@@ -167,7 +235,8 @@ export async function initiateCheckoutFormPayment(
     }));
 
     const rpcPayload = {
-      user_id:          user.id,
+      user_id:          user?.id ?? null,   // misafirde null
+      is_guest:         isGuest,
       customer_email:   formData.email,
       customer_name:    shippingSnapshot.fullName,
       customer_phone:   shippingSnapshot.phone,
@@ -176,15 +245,17 @@ export async function initiateCheckoutFormPayment(
       billing_address:  billingSnapshot ? formatAddressText(billingSnapshot) : null,
       subtotal:         serverSubtotal,
       shipping_cost:    shippingCost,
-      discount_amount:  0,
+      discount_amount:  discountAmount,
       total_amount:     totalAmount,
       payment_method:   'credit_card',
+      coupon_id:        couponId,
+      coupon_code:      couponCodeSnapshot,
       customer_note:    formData.customerNote || null,
       items:            rpcItems,
     };
 
     logPaymentEvent(supabase, {
-      user_id:         user.id,
+      user_id:         user?.id ?? null,
       event_type:      'PAYMENT_INITIATED',
       expected_amount: totalAmount,
       currency:        'TRY',
@@ -192,7 +263,8 @@ export async function initiateCheckoutFormPayment(
     });
 
     // 9. Atomik sipariş oluştur — sipariş + kalemler + stok düşme tek TX
-    const { data: rpcResult, error: rpcError } = await supabase
+    //    Misafir: admin (service_role) client — RLS bypass; üye: session client
+    const { data: rpcResult, error: rpcError } = await dbClient
       .rpc('place_order_atomic', { p_payload: rpcPayload });
 
     if (rpcError || !rpcResult?.success) {
@@ -203,6 +275,37 @@ export async function initiateCheckoutFormPayment(
 
     const orderId     = rpcResult.order_id     as string;
     const orderNumber = rpcResult.order_number  as string;
+
+    // 9.5. Kupon rezervasyonu (atomic) — order oluşturuldu, şimdi kilitle
+    let redemptionId: string | null = null;
+    if (couponId && discountAmount > 0) {
+      const redeemResult = await redeemCoupon({
+        couponId,
+        userId:         user!.id,   // kupon sadece üyeler için; !user guard yukarıda
+        orderId,
+        subtotal:       serverSubtotal,
+        discountAmount,
+        appliedSegment,
+        ipAddress:      ip,
+      });
+
+      if (!redeemResult.success) {
+        // Atomik rollback: order iptal et
+        const adminSupabase = getAdminSupabase();
+        await adminSupabase.rpc('expire_pending_orders', { p_order_ids: [orderId] });
+        console.error('[initiateCheckoutFormPayment] Kupon rezervasyonu başarısız:', redeemResult.error);
+        return { data: null, error: 'Kupon uygulanamadı. Lütfen tekrar deneyin.', success: false };
+      }
+
+      redemptionId = redeemResult.redemptionId;
+
+      // Redemption ID'yi order kaydına bağla
+      // coupon_id / coupon_code zaten place_order_atomic tarafından INSERT edildi
+      await getAdminSupabase()
+        .from('orders')
+        .update({ redemption_id: redemptionId })
+        .eq('id', orderId);
+    }
 
     // 10. Iyzico Checkout Form başlat — KARTSİZ istek
     //     Adres alanları snapshot üzerinden de-structuring ile dinamik doldurulur.
@@ -236,7 +339,8 @@ export async function initiateCheckoutFormPayment(
       callbackUrl,
       enabledInstallments: ['1', '2', '3', '6', '9'],
       buyer: {
-        id:                  user.id,
+        // Iyzico buyer.id: üye → UUID, misafir → "guest-{orderId}" (unique per order)
+        id:                  user?.id ?? `guest-${orderId}`,
         name:                shippingSnapshot.firstName,
         surname:             shippingSnapshot.lastName,
         gsmNumber:           shippingSnapshot.phone
@@ -267,13 +371,14 @@ export async function initiateCheckoutFormPayment(
     const formResult = await checkoutFormInitialize(checkoutRequest);
 
     if (formResult.status !== 'success') {
-      // Iyzico formu başlatılamadı — atomik rollback: stok iade + sipariş iptal
+      // Iyzico formu başlatılamadı — atomik rollback: stok iade + sipariş iptal + kupon release
       const adminSupabase = getAdminSupabase();
       await adminSupabase.rpc('expire_pending_orders', { p_order_ids: [orderId] });
+      if (redemptionId) await releaseCouponReservation(redemptionId);
 
       logPaymentEvent(supabase, {
         order_id:        orderId,
-        user_id:         user.id,
+        user_id:         user?.id ?? null,
         event_type:      'THREEDS_INIT_FAILED',
         conversation_id: orderId,
         error_code:      formResult.errorCode,
@@ -287,7 +392,7 @@ export async function initiateCheckoutFormPayment(
 
     logPaymentEvent(supabase, {
       order_id:        orderId,
-      user_id:         user.id,
+      user_id:         user?.id ?? null,
       event_type:      'THREEDS_INIT_SUCCESS',
       conversation_id: orderId,
       expected_amount: totalAmount,

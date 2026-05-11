@@ -43,7 +43,7 @@ function ProductCard({ product }: { product: ProductWithCategory }) {
 
   return (
     <Link href={`/urun/${product.slug}`} className="group block" aria-label={product.name}>
-      <div className="relative overflow-hidden bg-[#F3F4F6]" style={{ aspectRatio: '3/4' }}>
+      <div className="relative overflow-hidden bg-[#F3F4F6]" style={{ aspectRatio: '1/1' }}>
         <div className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.04]">
           {firstImage ? (
             <Image

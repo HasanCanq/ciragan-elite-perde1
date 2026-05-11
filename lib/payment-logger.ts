@@ -7,41 +7,42 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { PaymentTransactionInsert } from '@/types';
 
-// Iyzico yanıtından kart bilgisini temizle
+const SENSITIVE_KEYS = new Set([
+  'paymentCard',
+  'cardNumber',
+  'cvc',
+  'expireMonth',
+  'expireYear',
+  'cardHolderName',
+  'binNumber',
+  'lastFourDigits',
+  'cardToken',
+  'cardUserKey',
+  'cardAssociation',
+  'cardFamily',
+  'cardType',
+]);
+
+const MAX_SANITIZE_DEPTH = 8;
+
+// Iyzico yanıtından kart bilgisini temizle.
+// depth limiti: circular reference veya anormal derinlikte stack overflow'u önler.
 function sanitizeResponse(
-  response: Record<string, unknown> | undefined
+  response: Record<string, unknown> | undefined,
+  depth = 0
 ): Record<string, unknown> | undefined {
   if (!response) return undefined;
+  if (depth > MAX_SANITIZE_DEPTH) return { _truncated: true };
 
   const sanitized = { ...response };
 
-  // paymentCard objesini tamamen kaldır
-  delete sanitized.paymentCard;
-
-  // Bilinen hassas alanları kaldır
-  const sensitiveKeys = [
-    'cardNumber',
-    'cvc',
-    'expireMonth',
-    'expireYear',
-    'cardHolderName',
-    'binNumber',
-    'lastFourDigits',
-    'cardToken',
-    'cardUserKey',
-    'cardAssociation',
-    'cardFamily',
-    'cardType',
-  ];
-
-  for (const key of sensitiveKeys) {
+  SENSITIVE_KEYS.forEach((key) => {
     delete sanitized[key];
-  }
+  });
 
-  // İç içe objeleri de temizle
   for (const [key, value] of Object.entries(sanitized)) {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      sanitized[key] = sanitizeResponse(value as Record<string, unknown>);
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      sanitized[key] = sanitizeResponse(value as Record<string, unknown>, depth + 1);
     }
   }
 

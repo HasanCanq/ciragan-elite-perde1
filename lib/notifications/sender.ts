@@ -162,8 +162,8 @@ async function sendSms(phone: string, message: string): Promise<void> {
 // E-POSTA ŞABLONLARI
 // ============================================================
 
-const SITE_NAME = 'Çırağan Elite Perde';
-const SITE_URL  = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://ciragan-elite.com';
+const SITE_NAME = 'Hanedan Perde';
+const SITE_URL  = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hanedan perde.com';
 
 function buildEmailHtml(ctx: OrderNotificationContext): string {
   const statusLabel = ORDER_STATUS_LABELS[ctx.newStatus];

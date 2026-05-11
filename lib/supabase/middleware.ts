@@ -48,10 +48,11 @@ export async function updateSession(request: NextRequest) {
       isAdmin = profile?.role === 'ADMIN';
     }
 
-    // KRİTİK NOKTA: Kullanıcı yoksa VEYA Admin değilse -> 404'e gönder (Rewrite)
+    // Kullanıcı yoksa VEYA Admin değilse → anasayfaya yönlendir.
+    // rewrite() URL'yi gizler ama tarayıcıda /admin kalır ve sub-rotalar dengenebilir.
+    // redirect() URL'yi de değiştirerek admin varlığını açığa çıkarmaz.
     if (!user || !isAdmin) {
-      // Rewrite kullanıyoruz: URL değişmez (/admin kalır) ama içerik 404 olur.
-      return NextResponse.rewrite(new URL('/404', request.url));
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 

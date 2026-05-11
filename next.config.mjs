@@ -58,6 +58,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
+    // iyzipay paketi __dirname ile resources/ klasörünü bulur.
+    // Next.js bundle'ı bu klasörü kopyalamaz; paketi external bırakarak
+    // runtime'da node_modules'dan require edilmesini sağlıyoruz.
+    serverComponentsExternalPackages: ['iyzipay'],
   },
   images: {
     remotePatterns: [

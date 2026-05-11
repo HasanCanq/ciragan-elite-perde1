@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { signInAction, signUpAction, requestPasswordResetAction } from '@/lib/actions/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Eye, EyeOff, X, AlertCircle, CheckCircle, ArrowLeft, Mail } from 'lucide-react';
 
@@ -140,51 +141,38 @@ export default function AuthForm() {
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password,
-        });
-        if (error) throw error;
+        const result = await signInAction(formData.email, formData.password);
+        if (result.error) {
+          setErrorMsg(result.error);
+          return;
+        }
         router.push('/');
         router.refresh();
       } else {
         if (!formData.termsAccepted) {
           setErrorMsg('Lütfen Üyelik Sözleşmesi\'ni kabul ediniz.');
-          setLoading(false);
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({
+        const result = await signUpAction({
           email: formData.email,
           password: formData.password,
-          options: {
-            data: { full_name: `${formData.firstName} ${formData.lastName}` },
-          },
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          birthDate: formData.birthDate,
+          kvkkConsent: formData.kvkkConsent,
+          termsAccepted: formData.termsAccepted,
+          whatsappConsent: formData.whatsappConsent,
         });
 
-        if (error) throw error;
-
-        if (data.user) {
-          await supabase.from('profiles').update({
-            phone: formData.phone,
-            birth_date: formData.birthDate,
-            is_commercial_allowed: formData.kvkkConsent,
-            is_terms_accepted: formData.termsAccepted,
-            is_whatsapp_allowed: formData.whatsappConsent,
-            full_name: `${formData.firstName} ${formData.lastName}`
-          }).eq('id', data.user.id);
+        if (result.error) {
+          setErrorMsg(result.error);
+          return;
         }
 
         setSuccessMsg('Kayıt başarılı! Lütfen e-posta adresinize gelen onay linkine tıklayın.');
         setMode('login');
-      }
-    } catch (error: any) {
-      if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
-        const wait = 60;
-        setRetryAfter(wait);
-        setErrorMsg(`Çok fazla deneme yapıldı. ${wait} saniye sonra tekrar deneyin.`);
-      } else {
-        setErrorMsg(error.message || 'Bir hata oluştu.');
       }
     } finally {
       setLoading(false);
@@ -199,27 +187,20 @@ export default function AuthForm() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        forgotEmail.trim(),
-        {
-          redirectTo: `${location.origin}/auth/callback?type=recovery`,
-        }
+      const result = await requestPasswordResetAction(
+        forgotEmail,
+        `${location.origin}/auth/callback?type=recovery`
       );
-      if (error) throw error;
+      if (result.error) {
+        const wait = 60;
+        setRetryAfter(wait);
+        setErrorMsg(result.error);
+        return;
+      }
+      // Güvenlik: var olmayan e-posta da başarı göster (enumeration koruması)
       setSuccessMsg(
         'Şifre sıfırlama e-postası gönderildi. Gelen kutunuzu (ve spam klasörünüzü) kontrol edin.'
       );
-    } catch (error: any) {
-      if (error.status === 429 || error.message?.toLowerCase().includes('rate limit')) {
-        const wait = 60;
-        setRetryAfter(wait);
-        setErrorMsg(`Çok fazla deneme yapıldı. ${wait} saniye sonra tekrar deneyin.`);
-      } else {
-        // Güvenlik: var olmayan e-posta da başarı göster (enumeration koruması)
-        setSuccessMsg(
-          'Şifre sıfırlama e-postası gönderildi. Gelen kutunuzu (ve spam klasörünüzü) kontrol edin.'
-        );
-      }
     } finally {
       setLoading(false);
     }

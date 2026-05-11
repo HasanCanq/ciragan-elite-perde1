@@ -35,6 +35,7 @@ export default function Footer() {
                 { name: "Ürünler", href: "/kategori/tum-urunler" },
                 { name: "Hakkımızda", href: "/hakkimizda" },
                 { name: "İletişim", href: "/iletisim" },
+                { name: "Sipariş Takibi", href: "/siparis-takip" },
               ].map((link) => (
                 <li key={link.name}>
                   <Link href={link.href} className="text-white/80 hover:text-white transition-colors text-sm font-light">
@@ -45,15 +46,17 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Categories */}
+          {/* Müşteri Hizmetleri */}
           <div>
-            <h4 className="font-serif text-lg font-semibold mb-4 text-white">Kategoriler</h4>
+            <h4 className="font-serif text-lg font-semibold mb-4 text-white">Müşteri Hizmetleri</h4>
             <ul className="space-y-2">
               {[
-                { name: "Tül Perdeler", href: "/kategori/tul-perdeler" },
-                { name: "Fon Perdeler", href: "/kategori/fon-perdeler" },
-                { name: "Stor Perdeler", href: "/kategori/stor-perdeler" },
-                { name: "Zebra Perdeler", href: "/kategori/zebra-perdeler" },
+                { name: "Mesafeli Satış Sözleşmesi", href: "/mesafeli-satis" },
+                { name: "İptal & İade Politikası",   href: "/iade-politikasi" },
+                { name: "Kargo & Teslimat",          href: "/kargo-teslimat" },
+                { name: "Gizlilik Politikası",       href: "/gizlilik" },
+                { name: "Çerez Politikası",          href: "/cerez-politikasi" },
+                { name: "KVKK Aydınlatma Metni",     href: "/kvkk" },
               ].map((link) => (
                 <li key={link.name}>
                   <Link href={link.href} className="text-white/80 hover:text-white transition-colors text-sm font-light">
@@ -96,7 +99,8 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-6">
               <Link href="/gizlilik" className="text-white/60 hover:text-white text-xs transition-colors">Gizlilik Politikası</Link>
-              <Link href="/kosullar" className="text-white/60 hover:text-white text-xs transition-colors">Kullanım Koşulları</Link>
+              <Link href="/kvkk" className="text-white/60 hover:text-white text-xs transition-colors">KVKK</Link>
+              <Link href="/cerez-politikasi" className="text-white/60 hover:text-white text-xs transition-colors">Çerez Politikası</Link>
             </div>
           </div>
         </div>

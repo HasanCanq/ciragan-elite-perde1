@@ -12,6 +12,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { Info, Minus, Plus } from 'lucide-react';
+import MeasurementGuideModal from '@/components/product/MeasurementGuideModal';
+import type { MeasurementGuide } from '@/types';
 import {
   SIZE_LIMITS,
   type PileFactor,
@@ -132,6 +134,17 @@ export interface MeasurementFormProps {
    * Boşsa pile seçici gösterilmez ve API isteği gönderilmez.
    */
   pleats: PleatOption[];
+  /**
+   * Kategoriye ait ölçü kılavuzu (measurement_guides tablosundan).
+   * NULL = bu kategori için kılavuz tanımlı değil → buton gizlenir.
+   */
+  measurementGuide?: MeasurementGuide | null;
+  /**
+   * Admin panelinden kontrol edilen satış anahtarı.
+   * FALSE olduğunda "Sepete Ekle" butonu gizlenir, bilgilendirme mesajı gösterilir.
+   * Default: true (satış açık).
+   */
+  shopEnabled?: boolean;
 }
 
 // ─── Dinamik Zod şema fabrikası ────────────────────────────
@@ -199,8 +212,9 @@ function buildMeasurementSchema(
 
 // ─── Ana bileşen ───────────────────────────────────────────
 
-export default function MeasurementForm({ product, modelLimits, pleats }: MeasurementFormProps) {
-  const [added, setAdded]   = useState(false);
+export default function MeasurementForm({ product, modelLimits, pleats, measurementGuide, shopEnabled = true }: MeasurementFormProps) {
+  const [added, setAdded]       = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const addToCart           = useCartStore((s) => s.addToCart);
   const calculationType     = product.calculation_type;
 
@@ -384,17 +398,20 @@ export default function MeasurementForm({ product, modelLimits, pleats }: Measur
             <p className="text-[11px] tracking-[0.18em] uppercase font-medium text-black">
               Ölçü Girin
             </p>
-            <Link
-              href="/olcu-kilavuzu"
-              className={[
-                'text-[10px] tracking-[0.08em] text-[#9CA3AF]',
-                'border-b border-[#E0E0E0] pb-[1px]',
-                'hover:text-[#B89947] hover:border-[#B89947]',
-                'transition-colors duration-200 shrink-0',
-              ].join(' ')}
-            >
-              Ölçü Nasıl Alınır?
-            </Link>
+            {measurementGuide && (
+              <button
+                type="button"
+                onClick={() => setShowGuide(true)}
+                className={[
+                  'text-[10px] tracking-[0.08em] text-[#9CA3AF]',
+                  'border-b border-[#E0E0E0] pb-[1px]',
+                  'hover:text-[#B89947] hover:border-[#B89947]',
+                  'transition-colors duration-200 shrink-0',
+                ].join(' ')}
+              >
+                Ölçü Nasıl Alınır?
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -447,44 +464,65 @@ export default function MeasurementForm({ product, modelLimits, pleats }: Measur
       )}
 
       {/* ── 5. Adet + Sepete Ekle ───────────────────────── */}
-      <div className="grid grid-cols-[auto_1fr] gap-3">
-        <QuantityInput
-          register={register}
-          control={control}
-          setValue={setValue}
+      {!shopEnabled ? (
+        <div className="border border-[#F3F4F6] bg-[#FAFAFA] px-5 py-5 text-center space-y-1.5">
+          <p className="text-[11px] tracking-[0.22em] uppercase font-medium text-[#9CA3AF]">
+            Satışlarımız şu an kapalıdır
+          </p>
+          <p className="text-[10px] tracking-[0.04em] leading-relaxed text-[#C0C0C0]">
+            Ürünlerimizi inceleyebilirsiniz. Sipariş vermek için lütfen daha sonra tekrar ziyaret ediniz.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-[auto_1fr] gap-3">
+            <QuantityInput
+              register={register}
+              control={control}
+              setValue={setValue}
+            />
+
+            <button
+              type="submit"
+              disabled={!product.in_stock || added}
+              className={[
+                'h-[50px] text-[11px] tracking-[0.38em] uppercase font-medium',
+                'transition-colors duration-300',
+                added
+                  ? 'bg-black text-white cursor-default'
+                  : product.in_stock
+                    ? 'bg-black text-white hover:bg-[#B89947]'
+                    : 'bg-[#F5F5F5] text-[#ADADAD] border border-[#E5E5E5] cursor-not-allowed',
+              ].join(' ')}
+            >
+              {!product.in_stock
+                ? 'Stokta Yok'
+                : added
+                  ? '✓  Sepete Eklendi'
+                  : 'Sepete Ekle'}
+            </button>
+          </div>
+
+          {!product.in_stock && (
+            <p className="text-[10px] tracking-[0.06em] text-[#9CA3AF] -mt-3">
+              Bu ürün şu an stokta yok.{' '}
+              <Link
+                href="/kategori/tum-urunler"
+                className="underline hover:text-black transition-colors"
+              >
+                Benzer ürünleri inceleyin
+              </Link>
+            </p>
+          )}
+        </>
+      )}
+
+      {/* Ölçü kılavuzu modal */}
+      {showGuide && measurementGuide && (
+        <MeasurementGuideModal
+          guide={measurementGuide}
+          onClose={() => setShowGuide(false)}
         />
-
-        <button
-          type="submit"
-          disabled={!product.in_stock || added}
-          className={[
-            'h-[50px] text-[11px] tracking-[0.38em] uppercase font-medium',
-            'transition-colors duration-300',
-            added
-              ? 'bg-black text-white cursor-default'
-              : product.in_stock
-                ? 'bg-black text-white hover:bg-[#B89947]'
-                : 'bg-[#F5F5F5] text-[#ADADAD] border border-[#E5E5E5] cursor-not-allowed',
-          ].join(' ')}
-        >
-          {!product.in_stock
-            ? 'Stokta Yok'
-            : added
-              ? '✓  Sepete Eklendi'
-              : 'Sepete Ekle'}
-        </button>
-      </div>
-
-      {!product.in_stock && (
-        <p className="text-[10px] tracking-[0.06em] text-[#9CA3AF] -mt-3">
-          Bu ürün şu an stokta yok.{' '}
-          <Link
-            href="/kategori/tum-urunler"
-            className="underline hover:text-black transition-colors"
-          >
-            Benzer ürünleri inceleyin
-          </Link>
-        </p>
       )}
     </form>
   );

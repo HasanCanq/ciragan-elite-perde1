@@ -38,6 +38,30 @@ export default function ProductForm({ initialData }: ProductFormProps) {
     calculation_type: (initialData as any)?.calculation_type || 'adet',
   });
 
+  const [fabricProperties, setFabricProperties] = useState<string[]>(
+    (initialData as any)?.fabric_properties ?? []
+  );
+  const [fabricInput, setFabricInput] = useState('');
+
+  const addFabricProperty = () => {
+    const val = fabricInput.trim();
+    if (val && !fabricProperties.includes(val)) {
+      setFabricProperties(prev => [...prev, val]);
+    }
+    setFabricInput('');
+  };
+
+  const removeFabricProperty = (index: number) => {
+    setFabricProperties(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFabricKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addFabricProperty();
+    }
+  };
+
   const [compressing, setCompressing] = useState(false);
 
   // Çoklu Resim State'i (3 slot)
@@ -131,6 +155,7 @@ export default function ProductForm({ initialData }: ProductFormProps) {
       data.append('stock_quantity', parseFloat(String(formData.stock_quantity)).toFixed(2));
       if (formData.model_id) data.append('model_id', formData.model_id);
       data.append('low_stock_threshold', parseFloat(String(formData.low_stock_threshold)).toFixed(2));
+      data.append('fabric_properties', JSON.stringify(fabricProperties));
       // base_cost: DB sütunu henüz yok — şimdilik sadece loglanır, backend yoksayar
       const baseCost = parseFloat(String(formData.base_cost));
       if (!isNaN(baseCost) && baseCost > 0) {
@@ -430,6 +455,51 @@ export default function ProductForm({ initialData }: ProductFormProps) {
                   placeholder="Ürün özelliklerini buraya yazın..."
                   className="w-full px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] resize-none"
                 />
+              </div>
+
+              {/* Kumaş Özellikleri */}
+              <div className="border-t border-gray-100 pt-5">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Kumaş Özellikleri
+                  <span className="ml-2 text-xs font-normal text-gray-400">Ürün sayfasında etiket olarak görünür</span>
+                </label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {fabricProperties.map((prop, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 border border-gray-200 text-sm text-gray-700"
+                    >
+                      {prop}
+                      <button
+                        type="button"
+                        onClick={() => removeFabricProperty(i)}
+                        className="text-gray-400 hover:text-red-500 transition-colors leading-none"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={fabricInput}
+                    onChange={(e) => setFabricInput(e.target.value)}
+                    onKeyDown={handleFabricKeyDown}
+                    placeholder="Örn: Linen %60 · Pamuk %40"
+                    className="flex-1 px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#B89947]/20 focus:border-[#B89947] text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={addFabricProperty}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm transition-colors border border-gray-200"
+                  >
+                    Ekle
+                  </button>
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">
+                  Enter veya virgülle ekleyin. Örn: &quot;30°C Yıkanabilir&quot;, &quot;OEKO-TEX Sertifikalı&quot;
+                </p>
               </div>
 
               {/* Stok Yönetimi (Metretül) */}

@@ -7,6 +7,8 @@ import Link              from 'next/link'
 import {
   getProductWithModelPublic,
   getAllProductSlugsPublic,
+  getMeasurementGuide,
+  getShopEnabled,
 } from '@/lib/data/public-queries'
 import type { ModelLimits } from '@/components/product/MeasurementForm'
 import { JsonLd }               from '@/components/seo/JsonLd'
@@ -85,8 +87,15 @@ export default async function ProductPage({ params }: Props) {
   // Runtime Supabase join alanları (TypeScript türleri bu alanları görmez)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const productAny = product as any
-  const category   = productAny.category  as { name: string; slug: string } | null
+  const category   = productAny.category  as { name: string; slug: string; measurement_guide_key: string | null } | null
   const model      = productAny.model     as { name: string; max_width_cm: number; max_height_cm: number } | null
+
+  // Ölçü kılavuzu → kategorinin guide_key'i varsa fetch et
+  const guideKey = category?.measurement_guide_key ?? null
+  const [measurementGuide, shopEnabled] = await Promise.all([
+    guideKey ? getMeasurementGuide(guideKey) : Promise.resolve(null),
+    getShopEnabled(),
+  ])
 
   // Perde modeli sınırları → MeasurementForm dinamik Zod şeması için
   const modelLimits: ModelLimits | null = model
@@ -136,10 +145,9 @@ export default async function ProductPage({ params }: Props) {
     {
       title:   'Teslimat & İade',
       content:
-        'Siparişleriniz 7–14 iş günü içinde üretilip kargoya verilir. ' +
-        'Türkiye genelinde ücretsiz kargo. ' +
-        'Ürün, siparişe özel üretildiğinden iade kabul edilmez. ' +
-        'Ürün hasarlı ya da hatalı gelirse 3 iş günü içinde iletişime geçiniz.',
+        'Siparişleriniz, ölçülerinize özel olarak özenle üretilerek 7-14 iş günü içerisinde kargoya teslim edilir. ' +
+        'Tamamen sizin belirlediğiniz ölçülere ve tercihlere göre özel olarak hazırlanan ürünlerimiz, yasal mevzuat gereği cayma hakkı kapsamı dışındadır.' +
+        'Teslimat sırasında fark edilen kargo hasarlarında tutanak tutulması gerekmekte olup, olası üretim veya kumaş kusurları için teslimat gününden itibaren 24 saat içinde çözüm merkezimizle iletişime geçebilirsiniz.',
     },
   ]
 
@@ -222,7 +230,8 @@ export default async function ProductPage({ params }: Props) {
 
             {/* PDPForm — renkler, açıklamalar, akordeonlar + MeasurementForm slotu */}
             <PDPForm
-              colors={[]}          /* TODO: ürün renk tablosu eklenince DB'den getir */
+              colors={[]}
+              fabricProperties={product.fabric_properties ?? []}
               accordions={accordions}
               measurementSection={
                 <MeasurementForm
@@ -239,6 +248,8 @@ export default async function ProductPage({ params }: Props) {
                   }}
                   modelLimits={modelLimits}
                   pleats={product.pleats ?? []}
+                  measurementGuide={measurementGuide}
+                  shopEnabled={shopEnabled}
                 />
               }
             />

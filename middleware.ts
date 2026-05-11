@@ -60,8 +60,16 @@ async function checkRateLimit(request: NextRequest): Promise<NextResponse | null
         }
       );
     }
-  } catch {
-    // Redis bağlantı hatası olursa trafiği engelleme, devam et
+  } catch (err) {
+    // Production'da Redis crash → isteği engelle (fail-closed).
+    // Development'ta ise pass et ki geliştirme akışı bozulmasın.
+    console.error('[RateLimit] Redis bağlantı hatası:', err);
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Servis geçici olarak kullanım dışı. Lütfen kısa süre sonra tekrar deneyin.' },
+        { status: 503 }
+      );
+    }
   }
 
   return null;

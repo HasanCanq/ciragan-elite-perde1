@@ -13,14 +13,18 @@ import {
   Home,
   Menu,
   X,
+  Tag,
+  Ruler,
 } from 'lucide-react';
 
 const navItems = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/orders', label: 'Siparişler', icon: ShoppingBag },
-  { href: '/admin/products', label: 'Ürünler', icon: Package },
-  { href: '/admin/customers', label: 'Müşteriler', icon: Users },
-  { href: '/admin/settings', label: 'Ayarlar', icon: Settings },
+  { href: '/admin/dashboard',           label: 'Dashboard',       icon: LayoutDashboard },
+  { href: '/admin/orders',              label: 'Siparişler',       icon: ShoppingBag },
+  { href: '/admin/products',            label: 'Ürünler',          icon: Package },
+  { href: '/admin/customers',           label: 'Müşteriler',       icon: Users },
+  { href: '/admin/campaigns',           label: 'Kampanyalar',      icon: Tag },
+  { href: '/admin/measurement-guides',  label: 'Ölçü Kılavuzları', icon: Ruler },
+  { href: '/admin/settings',            label: 'Ayarlar',          icon: Settings },
 ];
 
 export default function AdminSidebar() {

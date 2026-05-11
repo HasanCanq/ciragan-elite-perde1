@@ -142,7 +142,7 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
               key={img.id}
               img={img}
               idx={i}
-              style={{ aspectRatio: '2/3' }}
+              style={{ aspectRatio: '1/1' }}
             />
           ))}
         </div>
@@ -150,7 +150,7 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
         {/* Ana görsel */}
         <div
           className="relative flex-1 overflow-hidden min-w-0"
-          style={{ aspectRatio: '2/3' }}
+          style={{ aspectRatio: '1/1' }}
         >
           <div
             className={[
@@ -213,7 +213,7 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
               img={img}
               idx={i}
               className="shrink-0"
-              style={{ aspectRatio: '2/3', width: '18%' }}
+              style={{ aspectRatio: '1/1', width: '18%' }}
             />
           ))}
         </div>

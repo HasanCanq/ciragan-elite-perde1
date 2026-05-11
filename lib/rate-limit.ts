@@ -1,9 +1,17 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
-// Redis'i sadece env var varsa oluştur — yoksa null döner (graceful degrade)
 function createRedis(): Redis | null {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    if (process.env.NODE_ENV === 'production') {
+      // Production'da Redis zorunludur — sessizce pass etmek DDoS açığıdır.
+      throw new Error(
+        '[rate-limit] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN env var eksik. ' +
+        'Production ortamında Redis gereklidir.'
+      );
+    }
+    // Development: env var yoksa uyar ama çalışmaya devam et
+    console.warn('[rate-limit] Redis env var bulunamadı — geliştirme modunda tüm limitler devre dışı.');
     return null;
   }
   return new Redis({
@@ -14,7 +22,7 @@ function createRedis(): Redis | null {
 
 const redis = createRedis();
 
-// Stub: Redis yoksa her isteğe izin ver
+// Development stub: her isteğe izin ver
 const ALLOW_ALL = {
   limit: async (_identifier: string) => ({
     success: true,

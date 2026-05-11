@@ -209,6 +209,8 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
         const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
         const modelId = (formData.get('model_id') as string) || null;
         const calculationType = (formData.get('calculation_type') as string) || 'adet';
+        const fabricPropertiesRaw = formData.get('fabric_properties') as string;
+        const fabricProperties: string[] = fabricPropertiesRaw ? JSON.parse(fabricPropertiesRaw) : [];
 
         // 2. Slug oluştur ve kontrol et
         let slug = generateSlug(name);
@@ -241,6 +243,7 @@ export async function createProduct(formData: FormData): Promise<ApiResponse<Pro
                 stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
                 low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
                 calculation_type: calculationType,
+                fabric_properties: fabricProperties,
                 ...(modelId ? { model_id: modelId } : {}),
             })
             .select()
@@ -295,6 +298,8 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
         const lowStockThreshold = parseFloat(formData.get('low_stock_threshold') as string || '5');
         const modelId = (formData.get('model_id') as string) || null;
         const calculationType = (formData.get('calculation_type') as string) || 'adet';
+        const fabricPropertiesRaw = formData.get('fabric_properties') as string;
+        const fabricProperties: string[] = fabricPropertiesRaw ? JSON.parse(fabricPropertiesRaw) : [];
 
         // Mevcut ürünü al (images + slug + audit diff için)
         const { data: currentProduct } = await supabase
@@ -346,6 +351,7 @@ export async function updateProduct(id: string, formData: FormData): Promise<Api
                 stock_quantity: isNaN(stockQuantity) ? 0 : stockQuantity,
                 low_stock_threshold: isNaN(lowStockThreshold) ? 5 : lowStockThreshold,
                 calculation_type: calculationType,
+                fabric_properties: fabricProperties,
                 ...(modelId ? { model_id: modelId } : {}),
                 updated_at: new Date().toISOString()
             })

@@ -21,6 +21,7 @@ export interface StoreSettings {
   shipping_cost: number;
   maintenance_mode: boolean;
   maintenance_message: string | null;
+  shop_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +34,7 @@ export interface StoreSettingsUpdate {
   shipping_cost?: number;
   maintenance_mode?: boolean;
   maintenance_message?: string | null;
+  shop_enabled?: boolean;
 }
 
 // =====================================================
@@ -136,9 +138,9 @@ export async function updateSettings(
 
     if (error) throw error;
 
-    // Revalidate paths
+    // Revalidate paths — '/' layout clears ISR cache for all product pages too
     revalidatePath('/admin/settings');
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
 
     return {
       data: settings as StoreSettings,
@@ -160,14 +162,14 @@ export async function updateSettings(
 // =====================================================
 
 export async function getPublicSettings(): Promise<
-  ApiResponse<Pick<StoreSettings, 'free_shipping_threshold' | 'shipping_cost' | 'maintenance_mode'>>
+  ApiResponse<Pick<StoreSettings, 'free_shipping_threshold' | 'shipping_cost' | 'maintenance_mode' | 'shop_enabled'>>
 > {
   try {
     const supabase = await createClient();
 
     const { data: settings, error } = await supabase
       .from('store_settings')
-      .select('free_shipping_threshold, shipping_cost, maintenance_mode')
+      .select('free_shipping_threshold, shipping_cost, maintenance_mode, shop_enabled')
       .single();
 
     if (error) throw error;

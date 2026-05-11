@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Loader2, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, AlertTriangle, ShoppingCart } from 'lucide-react';
 import { getSettings, updateSettings, StoreSettings } from '@/lib/actions/settings';
 
 export default function SettingsPage() {
@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [shippingCost, setShippingCost] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [shopEnabled, setShopEnabled] = useState(true);
 
   useEffect(() => {
     loadSettings();
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       setShippingCost(s.shipping_cost.toString());
       setMaintenanceMode(s.maintenance_mode);
       setMaintenanceMessage(s.maintenance_message || '');
+      setShopEnabled(s.shop_enabled ?? true);
     } else {
       setError('Ayarlar yüklenemedi');
     }
@@ -60,6 +62,7 @@ export default function SettingsPage() {
         shipping_cost: parseFloat(shippingCost),
         maintenance_mode: maintenanceMode,
         maintenance_message: maintenanceMessage || null,
+        shop_enabled: shopEnabled,
       });
 
       if (!result.success) {
@@ -224,6 +227,38 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* Shop Enabled */}
+            <div className="bg-white rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <ShoppingCart className="w-5 h-5 text-[#B89947]" />
+                <h2 className="text-lg font-medium text-gray-900">Satış Durumu</h2>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shopEnabled}
+                  onChange={(e) => setShopEnabled(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-[#B89947] border-gray-300 rounded focus:ring-[#B89947]"
+                />
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">Satışları Aktif Et</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Kapalıyken ürün sayfalarındaki &quot;Sepete Ekle&quot; butonu gizlenir; ziyaretçiler ürünleri inceleyebilir ancak sipariş veremez.
+                  </p>
+                </div>
+              </label>
+
+              {!shopEnabled && (
+                <div className="mt-4 flex items-center gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-sm text-amber-700">
+                    Satışlar şu an kapalı. Ziyaretçiler sipariş veremez.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Maintenance Mode */}
             <div className="bg-white rounded-xl p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
@@ -284,12 +319,22 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <div className="pt-3 border-t border-gray-200">
-                  <p className="text-gray-500">Durum</p>
+                  <p className="text-gray-500">Site Durumu</p>
                   <p className="font-medium text-gray-900">
                     {maintenanceMode ? (
                       <span className="text-orange-600">Bakım Modunda</span>
                     ) : (
                       <span className="text-green-600">Aktif</span>
+                    )}
+                  </p>
+                </div>
+                <div className="pt-3 border-t border-gray-200">
+                  <p className="text-gray-500">Satış Durumu</p>
+                  <p className="font-medium">
+                    {shopEnabled ? (
+                      <span className="text-green-600">Satışa Açık</span>
+                    ) : (
+                      <span className="text-amber-600">Satışa Kapalı</span>
                     )}
                   </p>
                 </div>

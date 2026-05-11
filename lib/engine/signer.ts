@@ -225,12 +225,23 @@ export function verify(token: string): VerifyResult {
 
   const expectedSig = computeHmac(canonicalize(payload), secret);
 
-  // HMAC hex her zaman 64 karakter (SHA256 = 32 byte);
-  // farklı uzunlukta gelen imzalar için padding ile eşit uzunluk sağla
-  const a = Buffer.from(expectedSig.padEnd(64, '0'), 'hex');
-  const b = Buffer.from(receivedSig.padEnd(64, '0').slice(0, 64), 'hex');
+  // Timing-safe karşılaştırma:
+  // 1. receivedSig tam 64 geçerli hex karakteri olmalı (SHA256 çıktısı sabiti).
+  //    Farklı uzunluk veya geçersiz hex → padding/truncation ile Buffer.from()
+  //    sıfır byte üretir; bu durum false-negative'e değil false-positive'e yol açabilir.
+  // 2. timingSafeEqual() tampon boyutları eşit olmak zorundadır (32 byte).
+  if (!/^[0-9a-fA-F]{64}$/.test(receivedSig)) {
+    return {
+      ok:      false,
+      reason:  'INVALID_SIGNATURE',
+      message: 'Fiyat tokeni imzası geçersiz — format hatası.',
+    };
+  }
 
-  const sigMatch = a.length === b.length && timingSafeEqual(a, b);
+  const a = Buffer.from(expectedSig, 'hex');  // Her zaman 32 byte
+  const b = Buffer.from(receivedSig, 'hex');  // Her zaman 32 byte (yukarıda doğrulandı)
+
+  const sigMatch = timingSafeEqual(a, b);
 
   if (!sigMatch) {
     return {

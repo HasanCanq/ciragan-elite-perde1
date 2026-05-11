@@ -19,7 +19,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       <article className="bg-white rounded-lg overflow-hidden shadow-elite transition-all duration-400 hover:shadow-elite-hover hover:-translate-y-1 h-full flex flex-col">
         
         {/* --- RESİM ALANI --- */}
-        <div className="relative aspect-[2/3] md:aspect-[3/4] lg:aspect-[4/5] overflow-hidden bg-elite-bone">
+        <div className="relative aspect-[1/1] overflow-hidden bg-elite-bone">
           
           {/* Resim Yoksa Arkaplan */}
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-elite-bone to-gray-100">

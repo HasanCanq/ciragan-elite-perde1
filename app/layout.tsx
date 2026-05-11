@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CartDrawer from "@/components/layout/CartDrawer";
+import CookieConsent from "@/components/CookieConsent";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { buildOrganizationSchema, buildWebSiteSchema } from "@/lib/seo/schemas";
 
@@ -28,7 +29,7 @@ const sansFont = DM_Sans({
   preload: true,
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ciraganeliteperde.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hanedan perde.com";
 
 /* ── Metadata ─────────────────────────────────────────────────────────────── */
 export const metadata: Metadata = {
@@ -114,6 +115,7 @@ export default function RootLayout({
         </main>
 
         <Footer />
+        <CookieConsent />
       </body>
     </html>
   );

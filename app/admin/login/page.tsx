@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, Shield } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { mapAuthError } from '@/lib/utils/error-mapper';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -57,11 +58,7 @@ export default function AdminLoginPage() {
       router.push('/admin/dashboard');
       router.refresh();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Bir hata oluştu. Lütfen tekrar deneyin.'
-      );
+      setError(mapAuthError(err as { message?: string; code?: string; status?: number }));
     } finally {
       setIsLoading(false);
     }

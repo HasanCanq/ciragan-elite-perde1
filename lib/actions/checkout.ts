@@ -1,20 +1,25 @@
 'use server';
 
-import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { orderLimiter } from '@/lib/rate-limit';
 import { validateAndBuildConsentedDocuments } from '@/lib/legal/document-versions';
+import { validateCoupon, redeemCoupon, releaseCouponReservation } from '@/lib/promotions/coupon-service';
 import {
   CartItem,
   Order,
   OrderInsert,
   OrderItemInsert,
   ApiResponse,
+  PileFactor,
   PILE_COEFFICIENTS_UPPER,
   SHIPPING,
 } from '@/types';
+import {
+  checkoutFormSchema,
+  type CheckoutFormInput,
+} from '@/lib/validations/checkout';
 import { verifyAndExtract }           from '@/lib/engine/signer';
 import { validateCalcInput }          from '@/lib/engine/validator';
 import { calc, type CalculationType, type CoreCalcResult } from '@/lib/engine/core';
@@ -26,115 +31,9 @@ import {
   type BillingAddressSnapshot,
 } from '@/lib/actions/checkout-helpers';
 
-// =====================================================
-// ZOD ŞEMALARI
-// =====================================================
-
-const TR_PHONE_RE =
-  /^(\+90|0090|90)?0?5\d{9}$|^05\d{9}$/;
-
-const htmlEncode = (s: string): string =>
-  s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
-
-const safeStr = (min: number, max = 500) =>
-  z
-    .string()
-    .min(min, `En az ${min} karakter olmalıdır`)
-    .max(max)
-    .transform(htmlEncode);
-
-const addressBaseSchema = z.object({
-  firstName:     safeStr(3, 150),
-  lastName:      z.string().max(150).transform(htmlEncode).default(''),
-  phone:         z
-    .string()
-    .regex(TR_PHONE_RE, 'Geçerli bir Türkiye telefon numarası girin (örn: 05xx xxx xx xx)'),
-  addressLine:   safeStr(10, 500),
-  neighbourhood: z.string().max(150).transform(htmlEncode).optional(),
-  district:      safeStr(2, 100),
-  city:          safeStr(2, 100),
-  postalCode:    z
-    .string()
-    .regex(/^\d{5}$/, 'Posta kodu 5 haneli rakam olmalıdır')
-    .optional()
-    .or(z.literal('')),
-});
-
-const billingAddressSchema = addressBaseSchema
-  .extend({
-    billingType:  z.enum(['INDIVIDUAL', 'CORPORATE']),
-    taxNumber:    z.string().max(11).optional(),
-    taxOffice:    z.string().max(150).transform(htmlEncode).optional(),
-    companyName:  safeStr(3, 255).optional(),
-  })
-  .superRefine((d, ctx) => {
-    if (d.billingType !== 'CORPORATE') return;
-
-    if (!d.taxNumber || !/^\d{10}$/.test(d.taxNumber)) {
-      ctx.addIssue({
-        code:    z.ZodIssueCode.custom,
-        path:    ['taxNumber'],
-        message: 'Kurumsal faturalama için 10 haneli VKN zorunludur',
-      });
-    }
-    if (!d.taxOffice || d.taxOffice.trim().length < 2) {
-      ctx.addIssue({
-        code:    z.ZodIssueCode.custom,
-        path:    ['taxOffice'],
-        message: 'Kurumsal faturalama için vergi dairesi zorunludur',
-      });
-    }
-    if (!d.companyName || d.companyName.trim().length < 3) {
-      ctx.addIssue({
-        code:    z.ZodIssueCode.custom,
-        path:    ['companyName'],
-        message: 'Kurumsal faturalama için şirket unvanı zorunludur',
-      });
-    }
-  });
-
-export const checkoutFormSchema = z
-  .object({
-    email:         z.string().email('Geçerli bir e-posta adresi girin').max(255),
-    shippingAddress: addressBaseSchema,
-    sameAsBilling: z.boolean(),
-    billingAddress: billingAddressSchema.optional(),
-    customerNote:  z.string().max(1000).transform(htmlEncode).optional(),
-    paymentMethod: z.enum(
-      ['credit_card'],
-      { error: 'Geçerli bir ödeme yöntemi seçin' }
-    ),
-    legalConsent: z.object({
-      documentVersionIds: z
-        .array(z.string().uuid())
-        .min(1, 'Yasal belgeler onaylanmalıdır'),
-    }),
-  })
-  .superRefine((d, ctx) => {
-    if (!d.sameAsBilling && !d.billingAddress) {
-      ctx.addIssue({
-        code:    z.ZodIssueCode.custom,
-        path:    ['billingAddress'],
-        message: 'Farklı fatura adresi seçildiğinde fatura adresi zorunludur',
-      });
-    }
-  });
-
-// =====================================================
-// DIŞA AÇIK TİPLER
-// =====================================================
-
-export type CheckoutFormInput = z.input<typeof checkoutFormSchema>;
-export type CheckoutFormData  = z.output<typeof checkoutFormSchema>;
-
-type AddressBase    = z.output<typeof addressBaseSchema>;
-type BillingAddress = z.output<typeof billingAddressSchema>;
+// CheckoutFormInput ve CheckoutFormData re-export — tüketiciler doğrudan
+// lib/validations/checkout'tan da import edebilir.
+export type { CheckoutFormInput, CheckoutFormData } from '@/lib/validations/checkout';
 
 // =====================================================
 // VALİDASYON YARDIMCILARI (mevcut iç API)
@@ -158,9 +57,7 @@ interface PlaceOrderResult {
   orderNumber: string;
 }
 
-export interface LegalConsentInput {
-  documentVersionIds: string[];
-}
+export type { LegalConsentInput } from '@/lib/validations/checkout';
 
 /**
  * CoreCalcResult + ürün/kalem bağlamı → OrderItemInsert dönüşümü.
@@ -227,9 +124,11 @@ export async function validateStock(
   const demandMetersMap   = new Map<string, number>();
 
   for (const item of cartItems) {
-    const pileCoeff   = PILE_COEFFICIENTS_UPPER[item.pileFactor] ?? 1.0;
-    const requiredM2  =
-      (item.width / 100) * (item.height / 100) * item.quantity * pileCoeff;
+    // item.pileCoefficient: mt türü için gerçek kumaş çarpanı (2.0/2.5/3.0);
+    // m2/adet türü için 1. PILE_COEFFICIENTS_UPPER kullanmak m2 ürünlerde
+    // çarpanı 2x'e çıkardığı için (SEYREK=2.0) CartItem'daki değeri kullanıyoruz.
+    const requiredM2 =
+      (item.width / 100) * (item.height / 100) * item.quantity * item.pileCoefficient;
     const cur         = demandMetersMap.get(item.productId) ?? 0;
     demandMetersMap.set(
       item.productId,
@@ -299,14 +198,31 @@ export async function validateAndCalculatePrices(
   }
 
   // ── Faz 2 (Nokta 7): Motor pipeline ile server-side fiyat hesaplama ────────
+  // NOT: validateStock() ile bu sorgu arasında TOCTOU penceresi var.
+  // is_published + in_stock filtreleri burada da zorunludur; yayından kalkmış
+  // ürünler her iki kontrol arasındaki sürede siparişe sızmamalıdır.
   const productIds = Array.from(new Set(cartItems.map((i) => i.productId)));
   const { data: products, error } = await supabase
     .from('products')
     .select('id, name, slug, images, base_price, calculation_type, min_width_cm, min_area_m2')
-    .in('id', productIds);
+    .in('id', productIds)
+    .eq('is_published', true)
+    .eq('in_stock', true);
 
   if (error || !products) {
     return { valid: false, errors: ['Ürün fiyat bilgileri alınamadı'], serverCalculatedItems, serverSubtotal };
+  }
+
+  // Sorguda filtrelenen (yayından kalkmış/stok dışı) ürünleri yakala
+  const fetchedIds = new Set(products.map((p) => p.id));
+  for (const id of productIds) {
+    if (!fetchedIds.has(id)) {
+      const name = cartItems.find((i) => i.productId === id)?.productName ?? id;
+      errors.push(`"${name}" artık satışta değil. Lütfen sepetinizi güncelleyin.`);
+    }
+  }
+  if (errors.length > 0) {
+    return { valid: false, errors, serverCalculatedItems, serverSubtotal };
   }
 
   const productMap = new Map(products.map((p) => [p.id, p]));
@@ -395,7 +311,8 @@ export async function validateAndCalculatePrices(
 
 export async function placeOrder(
   cartItems:    CartItem[],
-  rawFormData:  CheckoutFormInput
+  rawFormData:  CheckoutFormInput,
+  couponCode?:  string,
 ): Promise<ApiResponse<PlaceOrderResult>> {
   try {
     const supabase = await createClient();
@@ -457,8 +374,53 @@ export async function placeOrder(
     }
 
     const { serverCalculatedItems, serverSubtotal } = priceValidation;
+
+    // ── 6.5. Kupon doğrulama (server-side re-validation) ─────────────────
+    // Client'taki önizleme sonucuna güvenilmez; sipariş öncesi tekrar doğrulanır.
+    // Bu aşama DB write yapmaz; yazma işlemi order kaydından sonra atomic RPC'de yapılır.
+    let couponId:       string | null = null;
+    let discountAmount: number        = 0;
+    let appliedSegment: string | null = null;
+    let couponCodeSnapshot: string | null = null;
+
+    if (couponCode?.trim()) {
+      const normalizedCode = couponCode.trim().toUpperCase();
+
+      const [profileResult, orderCountResult] = await Promise.all([
+        supabase.from('profiles').select('segment').eq('id', user.id).single(),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .neq('status', 'CANCELLED'),
+      ]);
+
+      const couponResult = await validateCoupon({
+        code:         normalizedCode,
+        subtotal:     serverSubtotal,
+        userId:       user.id,
+        userSegment:  (profileResult.data as any)?.segment ?? null,
+        ipAddress,
+        isFirstOrder: (orderCountResult.count ?? 0) === 0,
+      });
+
+      if (!couponResult.valid) {
+        return { data: null, error: `Kupon hatası: ${couponResult.errorMessage}`, success: false };
+      }
+
+      couponId           = couponResult.couponId;
+      discountAmount     = couponResult.discountAmount;
+      appliedSegment     = couponResult.appliedSegment;
+      couponCodeSnapshot = normalizedCode;
+    }
+
+    // İndirim tutarı sepet tutarını aşamaz (güvenlik tabanı)
+    discountAmount = Math.min(discountAmount, serverSubtotal);
+
     const shippingCost  = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
-    const totalAmount   = Math.round((serverSubtotal + shippingCost) * 100) / 100;
+    // Kupon indirimi subtotal'dan düşülür; kargo ücreti ayrı hesaplanır
+    const discountedSubtotal = Math.round((serverSubtotal - discountAmount) * 100) / 100;
+    const totalAmount        = Math.round((discountedSubtotal + shippingCost) * 100) / 100;
 
     // ── 7. Adres snapshot'larını hazırla ──────────────────────────────────
     const shippingSnapshot = buildShippingSnapshot(formData.shippingAddress);
@@ -481,9 +443,8 @@ export async function placeOrder(
     const deductedItems: Array<{ productId: string; meters: number }> = [];
 
     for (const item of cartItems) {
-      const pileCoeff   = PILE_COEFFICIENTS_UPPER[item.pileFactor] ?? 1.0;
       const requiredM2  = Math.round(
-        (item.width / 100) * (item.height / 100) * item.quantity * pileCoeff * 1000
+        (item.width / 100) * (item.height / 100) * item.quantity * item.pileCoefficient * 1000
       ) / 1000;
 
       const { error: stockError } = await supabase.rpc('check_and_deduct_stock', {
@@ -534,11 +495,14 @@ export async function placeOrder(
 
       subtotal:         serverSubtotal,
       shipping_cost:    shippingCost,
-      discount_amount:  0,
+      discount_amount:  discountAmount,
       total_amount:     totalAmount,
       status:           'PENDING',
       customer_note:    formData.customerNote || null,
       payment_method:   formData.paymentMethod,
+      // Kupon snapshot — NULL ise kupon kullanılmadı
+      coupon_id:        couponId,
+      coupon_code:      couponCodeSnapshot,
     };
 
     const { data: order, error: orderError } = await supabase
@@ -556,6 +520,40 @@ export async function placeOrder(
       }
       console.error('Sipariş oluşturma hatası:', orderError);
       return { data: null, error: 'Sipariş oluşturulamadı. Lütfen tekrar deneyin.', success: false };
+    }
+
+    // ── 9.5. Kupon rezervasyonu (atomic) ──────────────────────────────────
+    // Sipariş kaydı oluşturuldu; şimdi kuponu kilitle.
+    // Başarısız olursa order + stok geri alınır.
+    let redemptionId: string | null = null;
+    if (couponId && discountAmount > 0) {
+      const redeemResult = await redeemCoupon({
+        couponId,
+        userId:         user.id,
+        orderId:        order.id,
+        subtotal:       serverSubtotal,
+        discountAmount,
+        appliedSegment,
+        ipAddress,
+      });
+
+      if (!redeemResult.success) {
+        // Rollback: order sil + stoku iade et
+        await supabase.from('orders').delete().eq('id', order.id);
+        for (const d of deductedItems) {
+          await supabase.rpc('restore_stock', { p_product_id: d.productId, p_quantity: d.meters });
+        }
+        console.error('[placeOrder] Kupon rezervasyonu başarısız:', redeemResult.error);
+        return { data: null, error: 'Kupon uygulanamadı. Lütfen tekrar deneyin.', success: false };
+      }
+
+      redemptionId = redeemResult.redemptionId;
+
+      // Redemption ID'yi order kaydına bağla
+      await supabase
+        .from('orders')
+        .update({ redemption_id: redemptionId })
+        .eq('id', order.id);
     }
 
     // ── 10. Sipariş kalemleri ──────────────────────────────────────────────
@@ -576,6 +574,7 @@ export async function placeOrder(
           p_quantity:   d.meters,
         });
       }
+      if (redemptionId) await releaseCouponReservation(redemptionId);
       console.error('Sipariş kalemleri ekleme hatası:', itemsError);
       return { data: null, error: 'Sipariş detayları kaydedilemedi. Lütfen tekrar deneyin.', success: false };
     }
@@ -601,6 +600,7 @@ export async function placeOrder(
           p_quantity:   d.meters,
         });
       }
+      if (redemptionId) await releaseCouponReservation(redemptionId);
       console.error('Yasal log kaydı hatası — sipariş geri alındı:', legalLogError);
       return { data: null, error: 'Sipariş işlemi tamamlanamadı. Lütfen tekrar deneyin.', success: false };
     }
@@ -633,7 +633,8 @@ export async function placeOrder(
 
 export async function placeOrderAtomic(
   cartItems:    CartItem[],
-  rawFormData:  CheckoutFormInput
+  rawFormData:  CheckoutFormInput,
+  couponCode?:  string,
 ): Promise<ApiResponse<PlaceOrderResult>> {
   try {
     const supabase = await createClient();
@@ -674,8 +675,49 @@ export async function placeOrderAtomic(
     }
 
     const { serverCalculatedItems, serverSubtotal } = priceValidation;
-    const shippingCost = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
-    const totalAmount  = Math.round((serverSubtotal + shippingCost) * 100) / 100;
+
+    // Kupon doğrulama (server-side re-validation)
+    let couponId:           string | null = null;
+    let discountAmount:     number        = 0;
+    let appliedSegment:     string | null = null;
+    let couponCodeSnapshot: string | null = null;
+
+    if (couponCode?.trim()) {
+      const normalizedCode = couponCode.trim().toUpperCase();
+      const reqH           = await headers();
+      const ipAddr         = reqH.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+
+      const [profileResult, orderCountResult] = await Promise.all([
+        supabase.from('profiles').select('segment').eq('id', user.id).single(),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .neq('status', 'CANCELLED'),
+      ]);
+
+      const couponResult = await validateCoupon({
+        code:         normalizedCode,
+        subtotal:     serverSubtotal,
+        userId:       user.id,
+        userSegment:  (profileResult.data as any)?.segment ?? null,
+        ipAddress:    ipAddr,
+        isFirstOrder: (orderCountResult.count ?? 0) === 0,
+      });
+
+      if (!couponResult.valid) {
+        return { data: null, error: `Kupon hatası: ${couponResult.errorMessage}`, success: false };
+      }
+
+      couponId           = couponResult.couponId;
+      discountAmount     = Math.min(couponResult.discountAmount, serverSubtotal);
+      appliedSegment     = couponResult.appliedSegment;
+      couponCodeSnapshot = normalizedCode;
+    }
+
+    const shippingCost       = serverSubtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
+    const discountedSubtotal = Math.round((serverSubtotal - discountAmount) * 100) / 100;
+    const totalAmount        = Math.round((discountedSubtotal + shippingCost) * 100) / 100;
 
     const shippingSnapshot  = buildShippingSnapshot(formData.shippingAddress);
     const effectiveBilling  = formData.sameAsBilling ? null : formData.billingAddress!;
@@ -684,9 +726,8 @@ export async function placeOrderAtomic(
 
     const rpcItems = serverCalculatedItems.map((item, idx) => {
       const cartItem   = cartItems[idx];
-      const pileCoeff  = PILE_COEFFICIENTS_UPPER[cartItem.pileFactor] ?? 1.0;
       const stockDeductM2 = Math.round(
-        (cartItem.width / 100) * (cartItem.height / 100) * cartItem.quantity * pileCoeff * 1000
+        (cartItem.width / 100) * (cartItem.height / 100) * cartItem.quantity * cartItem.pileCoefficient * 1000
       ) / 1000;
 
       return {
@@ -727,10 +768,12 @@ export async function placeOrderAtomic(
 
       subtotal:         serverSubtotal,
       shipping_cost:    shippingCost,
-      discount_amount:  0,
+      discount_amount:  discountAmount,
       total_amount:     totalAmount,
       payment_method:   formData.paymentMethod,
       customer_note:    formData.customerNote || null,
+      coupon_id:        couponId,
+      coupon_code:      couponCodeSnapshot,
       items:            rpcItems,
     };
 
@@ -746,13 +789,41 @@ export async function placeOrderAtomic(
       return { data: null, error: rpcResult?.error ?? 'Sipariş oluşturulamadı.', success: false };
     }
 
+    const orderId = rpcResult.order_id as string;
+
+    // Kupon rezervasyonu — order atomik oluşturuldu, şimdi kilitle
+    let redemptionId: string | null = null;
+    if (couponId && discountAmount > 0) {
+      const reqH   = await headers();
+      const ipAddr = reqH.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+
+      const redeemResult = await redeemCoupon({
+        couponId,
+        userId:         user.id,
+        orderId,
+        subtotal:       serverSubtotal,
+        discountAmount,
+        appliedSegment,
+        ipAddress:      ipAddr,
+      });
+
+      if (!redeemResult.success) {
+        await supabase.from('orders').update({ status: 'CANCELLED' }).eq('id', orderId).eq('status', 'PENDING');
+        console.error('[placeOrderAtomic] Kupon rezervasyonu başarısız:', redeemResult.error);
+        return { data: null, error: 'Kupon uygulanamadı. Lütfen tekrar deneyin.', success: false };
+      }
+
+      redemptionId = redeemResult.redemptionId;
+      await supabase.from('orders').update({ redemption_id: redemptionId }).eq('id', orderId);
+    }
+
     const reqHeaders = await headers();
     const ipAddress  = reqHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
     const userAgent  = reqHeaders.get('user-agent') ?? '';
 
     try {
       await supabase.rpc('insert_order_legal_log', {
-        p_order_id:            rpcResult.order_id,
+        p_order_id:            orderId,
         p_user_id:             user.id,
         p_ip_address:          ipAddress,
         p_user_agent:          userAgent,
@@ -761,9 +832,10 @@ export async function placeOrderAtomic(
       });
     } catch (legalErr) {
       console.error('[placeOrderAtomic] Yasal log hatası — sipariş iptal ediliyor:', legalErr);
+      if (redemptionId) await releaseCouponReservation(redemptionId);
       await supabase.from('orders')
         .update({ status: 'CANCELLED' })
-        .eq('id', rpcResult.order_id)
+        .eq('id', orderId)
         .eq('status', 'PENDING');
       return { data: null, error: 'Sipariş işlemi tamamlanamadı.', success: false };
     }
@@ -776,7 +848,7 @@ export async function placeOrderAtomic(
 
     return {
       data: {
-        order:       { id: rpcResult.order_id, order_number: rpcResult.order_number } as Order,
+        order:       { id: orderId, order_number: rpcResult.order_number } as Order,
         orderNumber: rpcResult.order_number,
       },
       error:   null,
@@ -804,7 +876,7 @@ export async function validateOrder(
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return { data: { valid: false, errors: ['Giriş yapmalısınız'] }, error: null, success: true };
+      return { data: null, error: 'Oturum süresi doldu. Lütfen yeniden giriş yapın.', success: false };
     }
 
     if (!cartItems?.length) {
@@ -875,11 +947,27 @@ export async function getServerCalculatedPrices(
     const productMap = new Map(products.map((p) => [p.id, p.base_price]));
 
     const items = cartItems.map((item) => {
-      // TODO: engine entegrasyonu sonrası priceToken'dan alınacak; fallback 0 = güvenli fail
       const basePrice = productMap.get(item.productId) ?? 0;
-      const { unitPrice } = calculateServerPrice(
-        item.width, item.height, item.pileFactor, basePrice
-      );
+
+      // PILE_COEFFICIENTS_UPPER değerleri (2.0 / 2.5 / 3.0) kumaş metre
+      // çarpanlarıdır (mt türü için). Fiyat çarpanı DEĞILDIR.
+      // Her hesap türü kendi formülünü kullanır:
+      //   mt    → fabricMeters = en × pileKatsayisi / 100  (yükseklik dahil edilmez)
+      //   m2    → alan = en × boy / 10000                  (pile uygulanmaz)
+      //   adet  → birim fiyat sabit
+      let unitPrice: number;
+      if (item.calculationType === 'mt') {
+        const fabricRatio = PILE_COEFFICIENTS_UPPER[item.pileFactor] ?? 2.0;
+        const fabricMeters = (item.width / 100) * fabricRatio;
+        unitPrice = Math.round(fabricMeters * basePrice * 100) / 100;
+      } else if (item.calculationType === 'adet') {
+        unitPrice = basePrice;
+      } else {
+        // m2 — saf alan; pile çarpanı yoktur
+        const areaM2 = (item.width / 100) * (item.height / 100);
+        unitPrice = Math.round(areaM2 * basePrice * 100) / 100;
+      }
+
       return {
         productId:        item.productId,
         width:            item.width,

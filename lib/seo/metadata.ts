@@ -26,7 +26,7 @@
 import type { Metadata } from 'next'
 import type { Category, CalculationType } from '@/types'
 
-const SITE_URL  = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://ciraganeliteperde.com'
+const SITE_URL  = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hanedan perde.com'
 const SITE_NAME = 'Hanedan'
 
 // ─── Ürün metadata tipi ────────────────────────────────────────────────────

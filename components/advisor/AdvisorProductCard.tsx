@@ -62,7 +62,7 @@ export default function AdvisorProductCard({ product }: AdvisorProductCardProps)
           'relative overflow-hidden',
           'bg-[#F9F9F9]',
           /* 4:3 oranı */
-          'aspect-[4/3]',
+          'aspect-[1/1]',
         ].join(' ')}
         aria-hidden="true"
       >

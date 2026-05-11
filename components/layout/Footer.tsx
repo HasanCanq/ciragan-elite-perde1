@@ -13,15 +13,24 @@ const COLLECTIONS = [
 const INFO_LINKS = [
   { label: 'Hakkımızda',    href: '/hakkimizda'    },
   { label: 'İletişim',      href: '/iletisim'      },
-  { label: 'Sipariş Takip', href: '/siparis-takip' },
+  { label: 'Sipariş Takibi', href: '/siparis-takip' },
   { label: 'Ölçü Kılavuzu', href: '/olcu-kilavuzu' },
 ]
 
+const CUSTOMER_LINKS = [
+  { label: 'Mesafeli Satış Sözleşmesi', href: '/mesafeli-satis'   },
+  { label: 'İptal & İade Politikası',   href: '/iade-politikasi'  },
+  { label: 'Kargo & Teslimat',          href: '/kargo-teslimat'   },
+  { label: 'KVKK Aydınlatma Metni',     href: '/kvkk'             },
+  { label: 'Çerez Politikası',          href: '/cerez-politikasi' },
+  { label: 'Gizlilik Politikası',       href: '/gizlilik'         },
+]
+
 const LEGAL_LINKS = [
-  { label: 'Gizlilik Politikası', href: '/gizlilik'      },
-  { label: 'Kullanım Koşulları',  href: '/kosullar'      },
-  { label: 'KVKK',                href: '/kvkk'          },
-  { label: 'İade Politikası',     href: '/iade-politika' },
+  { label: 'Gizlilik Politikası', href: '/gizlilik'        },
+  { label: 'KVKK',                href: '/kvkk'            },
+  { label: 'Çerez Politikası',    href: '/cerez-politikasi'},
+  { label: 'İptal & İade',        href: '/iade-politikasi' },
 ]
 
 /* ── Footer ─────────────────────────────────────────────────────────────────
@@ -34,10 +43,10 @@ export default function Footer() {
       <div className="h-container">
 
         {/* ── Main 4-column grid ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12 py-16 lg:py-20">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-8 gap-y-12 py-16 lg:py-20">
 
           {/* Col 1 — Brand ─────────────────────────────────────────────────── */}
-          <div className="col-span-2 md:col-span-1">
+          <div className="col-span-2 md:col-span-3 lg:col-span-1">
             <Link
               href="/"
               className={[
@@ -57,7 +66,7 @@ export default function Footer() {
             {/* Social */}
             <div className="flex items-center gap-5">
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/hanedancollectiontr/"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram'da takip edin"
@@ -104,6 +113,25 @@ export default function Footer() {
             </p>
             <ul className="flex flex-col gap-[10px]">
               {INFO_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-[12px] tracking-[0.04em] text-[#9CA3AF] hover:text-black transition-colors duration-200"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Col 4 — Müşteri Hizmetleri ────────────────────────────────────── */}
+          <div>
+            <p className="text-[11px] tracking-[0.18em] uppercase font-medium text-black mb-5">
+              Müşteri Hizmetleri
+            </p>
+            <ul className="flex flex-col gap-[10px]">
+              {CUSTOMER_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}

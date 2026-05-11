@@ -15,7 +15,7 @@
 
 import { cache } from 'react';
 import { getPublicSupabase } from '@/lib/supabase/public';
-import type { ProductWithCategory, Category, CurtainModel } from '@/types';
+import type { ProductWithCategory, Category, CurtainModel, MeasurementGuide } from '@/types';
 
 // ─── COMPOSITE TİPLER ──────────────────────────────────────
 
@@ -243,6 +243,70 @@ export const getProductsByCategoryPublic = cache(async (
   }
 
   return data ?? [];
+});
+
+/**
+ * guide_key ile ölçü kılavuzu getirir.
+ * PDP sayfasında MeasurementForm modalı için kullanılır.
+ */
+export const getMeasurementGuide = cache(
+  async (guideKey: string): Promise<MeasurementGuide | null> => {
+    const supabase = getPublicSupabase();
+
+    const { data, error } = await supabase
+      .from('measurement_guides')
+      .select('*')
+      .eq('guide_key', guideKey)
+      .eq('is_active', true)
+      .single();
+
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.error('[getMeasurementGuide]', guideKey, error.message);
+      }
+      return null;
+    }
+
+    return data;
+  },
+);
+
+/**
+ * Tüm aktif ölçü kılavuzlarını getirir.
+ * Admin yönetim sayfası için.
+ */
+export const getAllMeasurementGuidesPublic = cache(
+  async (): Promise<MeasurementGuide[]> => {
+    const supabase = getPublicSupabase();
+
+    const { data, error } = await supabase
+      .from('measurement_guides')
+      .select('*')
+      .order('guide_key');
+
+    if (error) {
+      console.error('[getAllMeasurementGuidesPublic]', error.message);
+      return [];
+    }
+
+    return data ?? [];
+  },
+);
+
+/**
+ * store_settings'ten shop_enabled bayrağını getirir.
+ * PDP ve kategori sayfalarında "Sepete Ekle" butonunu kontrol eder.
+ * Ayar okunamazsa güvenli default: true (satış açık).
+ */
+export const getShopEnabled = cache(async (): Promise<boolean> => {
+  const supabase = getPublicSupabase();
+
+  const { data } = await supabase
+    .from('store_settings')
+    .select('shop_enabled')
+    .single();
+
+  return data?.shop_enabled ?? true;
 });
 
 /**

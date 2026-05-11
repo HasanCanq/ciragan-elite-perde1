@@ -14,7 +14,7 @@
 
 import type { CalculationType } from '@/types'
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://ciraganeliteperde.com'
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hanedan perde.com'
 const SITE_NAME = 'Hanedan'
 const CURRENCY = 'TRY'
 

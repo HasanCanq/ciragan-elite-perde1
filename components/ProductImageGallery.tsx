@@ -16,7 +16,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
   return (
     <div>
       {/* Ana Görsel */}
-      <div className="aspect-[4/5] bg-white rounded-lg shadow-elite overflow-hidden relative group">
+      <div className="aspect-[1/1] bg-white rounded-lg shadow-elite overflow-hidden relative group">
         {mainImage ? (
           <Image
             src={mainImage}

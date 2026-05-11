@@ -59,7 +59,25 @@ export async function deleteMyAccount(): Promise<ApiResponse<null>> {
     };
   }
 
-  // 3. Profili anonimleştir (yabancı anahtar referansları korunur)
+  // 3. Auth hesabını ÖNCE sil — böylece profil anonimleştirme başarısız olsa bile
+  //    kullanıcı sisteme tekrar giriş yapamaz ve sahipli veri kalmaz.
+  //    Sıralama önemli: auth silinmeden profil değiştirilirse, auth silme başarısız
+  //    olduğunda kullanıcı kilitlenmiş ama giriş yapabilir durumda kalır.
+  const adminClient = await createAdminClient();
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
+
+  if (deleteError) {
+    console.error('deleteMyAccount — auth.admin.deleteUser error:', deleteError);
+    return {
+      success: false,
+      data: null,
+      error: 'Hesap silme işlemi tamamlanamadı. Lütfen destek ekibiyle iletişime geçin.',
+    };
+  }
+
+  // 4. Auth silindi; şimdi profili anonimleştir (yabancı anahtar referansları korunur).
+  //    Bu adım başarısız olursa auth zaten silinmiş; profil orphaned kalır ama
+  //    kimlik bağlantısı olmadığı için PII riski minimumdur. Hata loglanır.
   const { error: profileError } = await supabase
     .from('profiles')
     .update({
@@ -70,26 +88,10 @@ export async function deleteMyAccount(): Promise<ApiResponse<null>> {
     .eq('id', user.id);
 
   if (profileError) {
-    console.error('deleteMyAccount — profile anonymize error:', profileError);
-    return {
-      success: false,
-      data: null,
-      error: 'Profil anonimleştirilemedi. Lütfen tekrar deneyin.',
-    };
-  }
-
-  // 4. Auth hesabını Service Role ile sil
-  const adminClient = await createAdminClient();
-  const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
-
-  if (deleteError) {
-    // Profil zaten anonimleştirildi; geri alma yapmıyoruz (veri kalır ama kimlik bağlantısı kesildi)
-    console.error('deleteMyAccount — auth.admin.deleteUser error:', deleteError);
-    return {
-      success: false,
-      data: null,
-      error: 'Hesap silme işlemi tamamlanamadı. Lütfen destek ekibiyle iletişime geçin.',
-    };
+    // Auth zaten silindi; kullanıcı giriş yapamaz. Profil anonymization hatası
+    // kritik değil ama izlenmeli.
+    console.error('deleteMyAccount — profile anonymize error (auth already deleted):', profileError);
+    // Kullanıcıya başarı dön — auth silindi, oturum kapanacak.
   }
 
   // 5. Kullanıcıyı anasayfaya yönlendir (oturum otomatik kapanır)

@@ -113,7 +113,7 @@ function ProductGrid({ products, categoryName }: { products: ProductWithCategory
           className="group block"
         >
           {/* Image — portrait 3:4, overflow-hidden for scale hover */}
-          <div className="relative overflow-hidden bg-[#F3F4F6]" style={{ aspectRatio: '3/4' }}>
+          <div className="relative overflow-hidden bg-[#F3F4F6]" style={{ aspectRatio: '1/1' }}>
             {product.images?.[0] ? (
               <Image
                 src={product.images[0]}
@@ -193,7 +193,7 @@ function ProductGridSkeleton() {
       <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-10 py-8">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i}>
-            <div className="bg-[#F3F4F6] animate-pulse" style={{ aspectRatio: '3/4' }} />
+            <div className="bg-[#F3F4F6] animate-pulse" style={{ aspectRatio: '1/1' }} />
             <div className="pt-3 space-y-2">
               <div className="h-3 w-20 bg-[#F3F4F6] animate-pulse" />
               <div className="h-4 w-full bg-[#F3F4F6] animate-pulse" />

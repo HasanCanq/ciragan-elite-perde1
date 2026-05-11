@@ -24,7 +24,7 @@ import {
   Profile,
   type CalculationType,
 } from '@/types';
-import { type CheckoutFormData } from '@/lib/actions/checkout';
+import { type CheckoutFormData } from '@/lib/validations/checkout';
 
 // =====================================================
 // ÜRÜN İŞLEMLERİ
@@ -455,14 +455,33 @@ export async function createOrder(
     const shippingCost = subtotal >= SHIPPING.FREE_THRESHOLD ? 0 : SHIPPING.COST;
     const totalAmount = subtotal + shippingCost;
 
+    const { shippingAddress, sameAsBilling, billingAddress } = formData;
+    const customerName = [shippingAddress.firstName, shippingAddress.lastName].filter(Boolean).join(' ');
+    const shippingText = [
+      shippingAddress.addressLine,
+      shippingAddress.neighbourhood,
+      shippingAddress.district,
+      shippingAddress.city,
+      shippingAddress.postalCode,
+    ].filter(Boolean).join(', ');
+    const billingText = sameAsBilling || !billingAddress
+      ? shippingText
+      : [
+          billingAddress.addressLine,
+          billingAddress.neighbourhood,
+          billingAddress.district,
+          billingAddress.city,
+          billingAddress.postalCode,
+        ].filter(Boolean).join(', ');
+
     // Sipariş oluştur
     const orderData: OrderInsert = {
       user_id: user.id,
       customer_email: formData.email,
-      customer_name: formData.fullName,
-      customer_phone: formData.phone || null,
-      shipping_address: formData.shippingAddress,
-      billing_address: formData.sameAsBilling ? formData.shippingAddress : formData.billingAddress,
+      customer_name: customerName,
+      customer_phone: shippingAddress.phone || null,
+      shipping_address: shippingText,
+      billing_address: billingText,
       subtotal,
       shipping_cost: shippingCost,
       discount_amount: 0,

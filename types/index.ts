@@ -87,6 +87,8 @@ export interface Category {
   created_at: string;
   /** Self-referencing FK. NULL = kök (ana) kategori. */
   parent_id: string | null;
+  /** Ölçü kılavuzu anahtarı (measurement_guides.guide_key FK). NULL = kılavuz yok. */
+  measurement_guide_key: string | null;
 }
 
 /**
@@ -181,6 +183,8 @@ export interface Product {
    * Perde asistanı bu FK üzerinden model → ürün filtrelemesi yapar.
    */
   model_id: string | null;
+  /** Kumaş/özellik etiketleri. Örn: ['Linen %60 · Pamuk %40', '30°C Yıkanabilir'] */
+  fabric_properties: string[];
 }
 
 // Kategori bilgisiyle birlikte ürün
@@ -211,6 +215,7 @@ export interface ProductInsert {
   min_width_cm?: number | null;
   min_area_m2?: number | null;
   model_id?: string | null;
+  fabric_properties?: string[];
 }
 
 export interface ProductUpdate {
@@ -231,6 +236,7 @@ export interface ProductUpdate {
   min_width_cm?: number | null;
   min_area_m2?: number | null;
   model_id?: string | null;
+  fabric_properties?: string[];
 }
 
 // -----------------------------------------------------
@@ -350,6 +356,10 @@ export interface OrderInsert {
   status?: OrderStatus;
   customer_note?: string | null;
   payment_method?: string | null;
+  // Promotion Engine (migration 024)
+  coupon_id?: string | null;
+  coupon_code?: string | null;
+  redemption_id?: string | null;
 }
 
 export interface OrderUpdate {
@@ -567,6 +577,19 @@ export interface ContactFormData {
   phone?: string;
   subject: string;
   message: string;
+}
+
+// =====================================================
+// ÖLÇÜ KILAVUZU
+// =====================================================
+export interface MeasurementGuide {
+  id:         string;
+  guide_key:  string;
+  title:      string;
+  image_url:  string | null;
+  is_active:  boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // =====================================================
