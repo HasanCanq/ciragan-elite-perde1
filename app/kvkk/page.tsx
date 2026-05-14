@@ -20,7 +20,7 @@ export default function KvkkPage() {
             <p>
               Kişisel verileriniz; veri sorumlusu sıfatıyla{" "}
               <strong>Hanedan</strong> (Atatürk, Estergon Cd. No:3, 34000
-              Ümraniye/İstanbul — info@hanedan.com.tr — 0532 295 95 86) tarafından,
+              Ümraniye/İstanbul — info@hanedanperde.com.tr — 0553 046 4659) tarafından,
               6698 sayılı Kişisel Verilerin Korunması Kanunu (&quot;KVKK&quot;) kapsamında işlenmektedir.
             </p>
           ),
@@ -123,7 +123,7 @@ export default function KvkkPage() {
                 <li>Kanuna aykırı işleme nedeniyle zararın giderilmesini talep etme</li>
               </ul>
               <p className="mt-3">
-                Haklarınızı kullanmak için taleplerinizi <strong>info@hanedan.com.tr</strong> adresine güvenli elektronik imza ile veya kimliğinizi doğrulayan yazılı bir dilekçe ile iletebilirsiniz. Başvurunuz en geç 30 gün içinde yanıtlanacaktır.
+                Haklarınızı kullanmak için taleplerinizi <strong>info@hanedanperde.com.tr</strong> adresine güvenli elektronik imza ile veya kimliğinizi doğrulayan yazılı bir dilekçe ile iletebilirsiniz. Başvurunuz en geç 30 gün içinde yanıtlanacaktır.
               </p>
             </>
           ),

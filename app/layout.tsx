@@ -6,7 +6,7 @@ import Footer from "@/components/layout/Footer";
 import CartDrawer from "@/components/layout/CartDrawer";
 import CookieConsent from "@/components/CookieConsent";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { buildOrganizationSchema, buildWebSiteSchema } from "@/lib/seo/schemas";
+import { buildLocalBusinessSchema, buildWebSiteSchema } from "@/lib/seo/schemas";
 
 /* ── Fonts ─────────────────────────────────────────────────────────────────
    Both fonts are self-hosted by Next.js at build time — no external requests
@@ -101,8 +101,9 @@ export default function RootLayout({
       className={`${serifFont.variable} ${sansFont.variable}`}
     >
       <body className="min-h-screen flex flex-col bg-white text-black font-sans antialiased">
-        {/* ── Site-wide JSON-LD: Organization + WebSite (her sayfada bir kez) */}
-        <JsonLd data={buildOrganizationSchema()} />
+        {/* ── Site-wide JSON-LD: LocalBusiness + WebSite (her sayfada bir kez) */}
+        {/* aggregateRating ana sayfada ayrıca Google verisiyle zenginleştirilir */}
+        <JsonLd data={buildLocalBusinessSchema()} />
         <JsonLd data={buildWebSiteSchema()} />
 
         {/* Sticky header — sits in normal flow, hero uses calc(100vh - 64px) */}

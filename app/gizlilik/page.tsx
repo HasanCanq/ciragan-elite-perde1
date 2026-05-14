@@ -100,8 +100,8 @@ export default function GizlilikPage() {
                 &quot;KVKK Aydınlatma Metni&quot;
               </a>{" "}
               sayfamızdan ulaşabilir; taleplerinizi{" "}
-              <a href="mailto:info@hanedan.com.tr" className="hover:underline">
-                info@hanedan.com.tr
+              <a href="mailto:info@hanedanperde.com.tr" className="hover:underline">
+                info@hanedanperde.com.tr
               </a>{" "}
               adresi üzerinden bize iletebilirsiniz.
             </p>

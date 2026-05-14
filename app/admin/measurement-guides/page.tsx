@@ -10,9 +10,11 @@ import {
 import type { MeasurementGuide } from '@/types';
 
 const GUIDE_LABELS: Record<string, string> = {
-  'fon':              'Fon Perde',
-  'tul':              'Tül Perde',
-  'zebra-stor-ahsap': 'Zebra / Stor / Ahşap Jaluzi',
+  'fon':          'Fon Perde',
+  'tul':          'Tül Perde',
+  'zebra':        'Zebra Perde',
+  'stor':         'Stor Perde',
+  'ahsap-jaluzi': 'Ahşap Jaluzi',
 };
 
 export default function MeasurementGuidesPage() {

@@ -37,61 +37,30 @@ export default function AboutPage() {
       {/* Our Story Section */}
       <section className="py-16 lg:py-24">
         <div className="h-container">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Content */}
-            <div>
-              <span className="text-[#B89947] font-medium tracking-wider uppercase text-sm">
-                Hikayemiz
-              </span>
-              <h2 className="font-serif text-3xl lg:text-4xl font-semibold text-black mt-3 mb-6">
-                Terzilik Ustalığından Lüks Ev Tekstiline
-              </h2>
-              <div className="space-y-4 text-[#9CA3AF] leading-relaxed">
-                <p>
-                  1985 yılında, İstanbul&apos;un kalbinde küçük bir terzi atölyesinde başlayan
-                  yolculuğumuz, bugün Türkiye&apos;nin en seçkin perde markalarından biri haline
-                  geldi. Kurucu ustamızın &quot;Her dikiş bir imza, her kumaş bir hikaye&quot;
-                  felsefesi, nesiller boyu aktarılarak günümüze ulaştı.
-                </p>
-                <p>
-                  Geleneksel terzilik sanatının inceliğini, modern tasarım anlayışıyla
-                  harmanlayarak benzersiz bir koleksiyon oluşturduk. Her perdemiz, yıllara
-                  dayanan deneyim ve tutkuyla şekillenir.
-                </p>
-                <p>
-                  Çırağan Elite olarak, sadece perde satmıyoruz; evlerinize zarafet,
-                  konfor ve karakter katıyoruz. Kişiye özel ölçü ve tasarım anlayışımız,
-                  her müşterimize eşsiz bir deneyim sunmamızı sağlıyor.
-                </p>
-              </div>
-            </div>
-
-            {/* Image Placeholder */}
-            <div className="relative">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-4">
-                  <div className="aspect-[4/5] bg-[#FAFAFA] flex items-center justify-center border border-[#B89947]/20">
-                    <div className="text-center p-6">
-                      <Scissors className="w-12 h-12 text-[#B89947] mx-auto mb-3" />
-                      <p className="text-[#9CA3AF] text-sm">Atölye Görüntüsü</p>
-                    </div>
-                  </div>
-                  <div className="aspect-square bg-[#FAFAFA] flex items-center justify-center border border-[#F3F4F6]">
-                    <div className="text-center p-6">
-                      <Award className="w-12 h-12 text-black/60 mx-auto mb-3" />
-                      <p className="text-[#9CA3AF] text-sm">Ödüllerimiz</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="pt-8">
-                  <div className="aspect-[3/4] bg-[#FAFAFA] flex items-center justify-center border border-[#B89947]/30">
-                    <div className="text-center p-6">
-                      <span className="font-serif text-6xl font-bold text-[#B89947]">39</span>
-                      <p className="text-[#9CA3AF] mt-2">Yıllık Tecrübe</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="max-w-2xl">
+            <span className="text-[#B89947] font-medium tracking-wider uppercase text-sm">
+              Hikayemiz
+            </span>
+            <h2 className="font-serif text-3xl lg:text-4xl font-semibold text-black mt-3 mb-6">
+              Terzilik Ustalığından Lüks Ev Tekstiline
+            </h2>
+            <div className="space-y-4 text-[#9CA3AF] leading-relaxed">
+              <p>
+                1985 yılında, İstanbul&apos;un kalbinde küçük bir terzi atölyesinde başlayan
+                yolculuğumuz, bugün Türkiye&apos;nin en seçkin perde markalarından biri haline
+                geldi. Kurucu ustamızın &quot;Her dikiş bir imza, her kumaş bir hikaye&quot;
+                felsefesi, nesiller boyu aktarılarak günümüze ulaştı.
+              </p>
+              <p>
+                Geleneksel terzilik sanatının inceliğini, modern tasarım anlayışıyla
+                harmanlayarak benzersiz bir koleksiyon oluşturduk. Her perdemiz, yıllara
+                dayanan deneyim ve tutkuyla şekillenir.
+              </p>
+              <p>
+                Çırağan Elite olarak, sadece perde satmıyoruz; evlerinize zarafet,
+                konfor ve karakter katıyoruz. Kişiye özel ölçü ve tasarım anlayışımız,
+                her müşterimize eşsiz bir deneyim sunmamızı sağlıyor.
+              </p>
             </div>
           </div>
         </div>

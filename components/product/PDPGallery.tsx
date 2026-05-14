@@ -149,7 +149,7 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
 
         {/* Ana görsel */}
         <div
-          className="relative flex-1 overflow-hidden min-w-0"
+          className="relative flex-1 overflow-hidden min-w-0 group/main"
           style={{ aspectRatio: '1/1' }}
         >
           <div
@@ -173,6 +173,51 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
             )}
           </div>
 
+          {/* Önceki / Sonraki butonları */}
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveIdx((i) => (i - 1 + images.length) % images.length)}
+                aria-label="Önceki görsel"
+                className={[
+                  'absolute left-3 top-1/2 -translate-y-1/2 z-10',
+                  'w-9 h-9 flex items-center justify-center',
+                  'bg-white/80 hover:bg-white',
+                  'text-[#4B4B4B] hover:text-black',
+                  'transition-all duration-200',
+                  // Mobilde her zaman görünür; desktop'ta sadece hover'da
+                  'opacity-100 lg:opacity-0 lg:group-hover/main:opacity-100',
+                ].join(' ')}
+              >
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"
+                  strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+                  <path d="M10 3L5 8l5 5" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveIdx((i) => (i + 1) % images.length)}
+                aria-label="Sonraki görsel"
+                className={[
+                  'absolute right-3 top-1/2 -translate-y-1/2 z-10',
+                  'w-9 h-9 flex items-center justify-center',
+                  'bg-white/80 hover:bg-white',
+                  'text-[#4B4B4B] hover:text-black',
+                  'transition-all duration-200',
+                  // Mobilde her zaman görünür; desktop'ta sadece hover'da
+                  'opacity-100 lg:opacity-0 lg:group-hover/main:opacity-100',
+                ].join(' ')}
+              >
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"
+                  strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4" aria-hidden="true">
+                  <path d="M6 3l5 5-5 5" />
+                </svg>
+              </button>
+            </>
+          )}
+
           {/* Görsel sayacı — sağ alt köşe */}
           {images.length > 1 && (
             <div
@@ -185,20 +230,6 @@ export default function PDPGallery({ images }: { images: GalleryImage[] }) {
             >
               {String(activeIdx + 1).padStart(2, '0')}&nbsp;/&nbsp;
               {String(images.length).padStart(2, '0')}
-            </div>
-          )}
-
-          {/* Klavye yardım ipucu — yalnızca odak alındığında */}
-          {images.length > 1 && (
-            <div
-              aria-hidden="true"
-              className={[
-                'absolute bottom-4 left-4 z-10',
-                'opacity-0 focus-within:opacity-100',
-                'transition-opacity duration-300',
-              ].join(' ')}
-            >
-              <span className="text-[8px] tracking-[0.12em] text-[#ABABAB]">← →</span>
             </div>
           )}
         </div>

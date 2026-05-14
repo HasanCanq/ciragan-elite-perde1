@@ -42,7 +42,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://*.iyzipay.com",
       "frame-src 'self' https://*.iyzipay.com https://sandbox-api.iyzipay.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.iyzipay.com https://sandbox-api.iyzipay.com",
-      "img-src 'self' data: blob: https://*.supabase.co https://www.google.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://www.google.com https://lh3.googleusercontent.com",
       "font-src 'self' data:",
       "object-src 'none'",
       "base-uri 'self'",
@@ -68,6 +68,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.supabase.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
       },
     ],
   },

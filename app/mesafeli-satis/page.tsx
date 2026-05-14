@@ -20,7 +20,7 @@ export default function MesafeliSatisPage() {
             <>
               <p>
                 <strong>SATICI:</strong> Hanedan — Atatürk, Estergon Cd. No:3, 34000
-                Ümraniye/İstanbul — Tel: 0532 295 95 86 — E-posta: info@ciraganelite.com
+                Ümraniye/İstanbul — Tel: 0553 046 4659 — E-posta: info@ciraganelite.com
               </p>
               <p>
                 <strong>ALICI:</strong> Sipariş formunda belirtilen ad, soyad ve iletişim bilgilerine

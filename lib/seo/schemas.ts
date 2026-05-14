@@ -50,6 +50,7 @@ export interface SchemaProductInput {
   in_stock: boolean
   meta_description?: string | null
   category?: { name: string; slug: string } | null
+  aggregateRating?: { ratingValue: number; reviewCount: number } | null
 }
 
 export interface SchemaProductBasic {
@@ -104,6 +105,17 @@ export function buildProductSchema(
       name: SITE_NAME,
     },
     ...(product.category ? { category: product.category.name } : {}),
+    ...(product.aggregateRating && product.aggregateRating.reviewCount > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: product.aggregateRating.ratingValue.toFixed(1),
+            reviewCount: product.aggregateRating.reviewCount,
+            bestRating: '5',
+            worstRating: '1',
+          },
+        }
+      : {}),
     offers: buildOfferSchema(product, url, base),
   }
 }
@@ -200,6 +212,47 @@ export function buildOrganizationSchema(opts?: { baseUrl?: string }) {
       contactType: 'customer service',
       availableLanguage: { '@type': 'Language', name: 'Turkish' },
     },
+  }
+}
+
+// ─── LocalBusiness şeması ──────────────────────────────────────────────────
+//
+// Root layout'ta Organization yerine kullanılır.
+// Ana sayfada aggregateRating (Google Places) ile genişletilir.
+
+export function buildLocalBusinessSchema(opts?: {
+  baseUrl?: string
+  aggregateRating?: { ratingValue: number; reviewCount: number } | null
+}) {
+  const base = opts?.baseUrl ?? SITE_URL
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': `${base}/#organization`,
+    name: SITE_NAME,
+    url: base,
+    logo: {
+      '@type': 'ImageObject',
+      url: `${base}/logo.png`,
+      width: '200',
+      height: '60',
+    },
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer service',
+      availableLanguage: { '@type': 'Language', name: 'Turkish' },
+    },
+    ...(opts?.aggregateRating && opts.aggregateRating.reviewCount > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: opts.aggregateRating.ratingValue.toFixed(1),
+            reviewCount: opts.aggregateRating.reviewCount,
+            bestRating: '5',
+            worstRating: '1',
+          },
+        }
+      : {}),
   }
 }
 

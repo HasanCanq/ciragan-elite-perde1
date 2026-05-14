@@ -159,12 +159,14 @@ export function JaluziIllustration({ className }: IllustrationProps) {
 // ─── Slug bazlı dispatch ─────────────────────────────────────
 
 const ILLUSTRATION_MAP: Record<string, (props: IllustrationProps) => React.ReactElement> = {
-  kruvaze:  KruvazeIllustration,
-  stor:     StorIllustration,
-  blackout: BlackoutIllustration,
-  zebra:    ZebraIllustration,
-  plicell:  PlicellIllustration,
-  jaluzi:   JaluziIllustration,
+  kruvaze:       KruvazeIllustration,
+  stor:          StorIllustration,
+  blackout:      BlackoutIllustration,
+  'blackout-stor': StorIllustration,
+  zebra:         ZebraIllustration,
+  plicell:       PlicellIllustration,
+  jaluzi:        JaluziIllustration,
+  'ahsap-jaluzi': JaluziIllustration,
 };
 
 /** Perde model slug'ına göre doğru SVG illüstrasyonu döner. */

@@ -18,12 +18,8 @@ const INFO_LINKS = [
 ]
 
 const CUSTOMER_LINKS = [
-  { label: 'Mesafeli Satış Sözleşmesi', href: '/mesafeli-satis'   },
-  { label: 'İptal & İade Politikası',   href: '/iade-politikasi'  },
-  { label: 'Kargo & Teslimat',          href: '/kargo-teslimat'   },
-  { label: 'KVKK Aydınlatma Metni',     href: '/kvkk'             },
-  { label: 'Çerez Politikası',          href: '/cerez-politikasi' },
-  { label: 'Gizlilik Politikası',       href: '/gizlilik'         },
+  { label: 'Mesafeli Satış Sözleşmesi', href: '/mesafeli-satis'  },
+  { label: 'İptal & İade Politikası',   href: '/iade-politikasi' },
 ]
 
 const LEGAL_LINKS = [
@@ -150,21 +146,21 @@ export default function Footer() {
               İletişim
             </p>
             <ul className="flex flex-col gap-[10px] text-[12px] tracking-[0.04em] text-[#9CA3AF]">
-              <li>Çırağan Cd. No:12, Beşiktaş<br />İstanbul</li>
+              <li>Mehmet Akif Ersoy Mah. Çamlıca Yolu Cad. No:31A</li>
               <li>
                 <a
-                  href="tel:+902121234567"
+                  href="tel:+905530464659"
                   className="hover:text-black transition-colors duration-200"
                 >
-                  +90 212 123 45 67
+                  0553 046 46 59
                 </a>
               </li>
               <li>
                 <a
-                  href="mailto:info@hanedan.com.tr"
+                  href="mailto:info@hanedanperde.com.tr"
                   className="hover:text-black transition-colors duration-200"
                 >
-                  info@hanedan.com.tr
+                  info@hanedanperde.com.tr
                 </a>
               </li>
               <li className="pt-1 text-[11px]">Pzt – Cmt · 09:00 – 18:00</li>

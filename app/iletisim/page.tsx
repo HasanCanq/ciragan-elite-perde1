@@ -85,8 +85,7 @@ export default function ContactPage() {
                   <div>
                     <h3 className="font-serif text-lg font-semibold text-black mb-1">Adres</h3>
                     <p className="text-[#9CA3AF] leading-relaxed">
-                      Atatürk, Estergon Cd. No:3, <br />
-                      34000 Ümraniye/İstanbul
+                      Mehmet Akif Ersoy Mah. Çamlıca Yolu Cad. No:31A
                     </p>
                   </div>
                 </div>
@@ -98,7 +97,7 @@ export default function ContactPage() {
                   <div>
                     <h3 className="font-serif text-lg font-semibold text-black mb-1">Telefon</h3>
                   
-                    <p className="text-[#9CA3AF] text-sm">0532 295 95 86 (WhatsApp)</p>
+                    <p className="text-[#9CA3AF] text-sm">0553 046 46 59 (WhatsApp)</p>
                   </div>
                 </div>
 

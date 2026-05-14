@@ -468,6 +468,31 @@ export interface ReviewWithUser extends Review {
   } | null;
 }
 
+// -----------------------------------------------------
+// GOOGLE REVIEWS CACHE
+// -----------------------------------------------------
+export interface GoogleReview {
+  id: string;
+  google_review_id: string;
+  author_name: string;
+  author_url: string | null;
+  profile_photo: string | null;
+  rating: number;
+  text: string | null;
+  time: number | null;
+  relative_time: string | null;
+  language: string | null;
+  is_visible: boolean;
+  fetched_at: string;
+  created_at: string;
+}
+
+export interface GooglePlaceSummary {
+  total_rating: number | null;
+  total_reviews: number | null;
+  last_fetched_at: string | null;
+}
+
 // =====================================================
 // SEPET TİPLERİ (Frontend - Zustand Store)
 // =====================================================

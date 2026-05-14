@@ -422,7 +422,7 @@ CREATE TABLE store_settings (
   id                       UUID          DEFAULT gen_random_uuid() PRIMARY KEY,
   site_name                VARCHAR(255)  NOT NULL DEFAULT 'Çırağan Elite Perde',
   support_email            VARCHAR(255)  NOT NULL DEFAULT 'info@ciraganeliteperde.com',
-  support_phone            VARCHAR(20)   NOT NULL DEFAULT '0532 295 95 86',
+  support_phone            VARCHAR(20)   NOT NULL DEFAULT '0553 046 4659',
   free_shipping_threshold  NUMERIC(10,2) NOT NULL DEFAULT 5000.00,
   shipping_cost            NUMERIC(10,2) NOT NULL DEFAULT 150.00,
   maintenance_mode         BOOLEAN       NOT NULL DEFAULT FALSE,
@@ -1372,7 +1372,7 @@ INSERT INTO store_settings (
   '00000000-0000-0000-0000-000000000001'::UUID,
   'Çırağan Elite Perde',
   'info@ciraganeliteperde.com',
-  '0532 295 95 86',
+  '0553 046 4659',
   5000.00,
   150.00,
   FALSE

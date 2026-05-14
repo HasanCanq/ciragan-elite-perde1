@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { ChevronDown, Check, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
@@ -64,6 +64,11 @@ export default function ProductFilters({
 
   const [minPrice, setMinPrice] = useState(currentFilters.minPrice || '');
   const [maxPrice, setMaxPrice] = useState(currentFilters.maxPrice || '');
+
+  useEffect(() => {
+    setMinPrice(currentFilters.minPrice || '');
+    setMaxPrice(currentFilters.maxPrice || '');
+  }, [currentFilters.minPrice, currentFilters.maxPrice]);
 
   const createQueryString = useCallback(
     (updates: Record<string, string | null>) => {
@@ -171,6 +176,12 @@ export default function ProductFilters({
                 onClick={() => {
                   setMinPrice(range.min);
                   setMaxPrice(range.max);
+                  const qs = createQueryString({
+                    minPrice: range.min || null,
+                    maxPrice: range.max || null,
+                  });
+                  router.push(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+                  onClose?.();
                 }}
                 className={`px-3 py-1.5 text-[8px] tracking-[0.2em] uppercase border transition-colors duration-200 ${
                   minPrice === range.min && maxPrice === range.max
@@ -216,30 +227,6 @@ export default function ProductFilters({
         </AccordionSection>
       )}
 
-      {/* Stock Filter */}
-      <AccordionSection title="Stok Durumu" defaultOpen={false}>
-        <div className="space-y-1">
-          <label className="flex items-center gap-3 px-3 py-2 hover:bg-[#B89947]/5 cursor-pointer group transition-colors duration-200">
-            <input
-              type="checkbox"
-              defaultChecked
-              className="w-4 h-4 border border-[#B89947]/30 bg-transparent cursor-pointer accent-[#B89947]"
-            />
-            <span className="text-[#767676] text-[9px] tracking-[0.2em] uppercase group-hover:text-[#B89947] transition-colors duration-200">
-              Stokta Olanlar
-            </span>
-          </label>
-          <label className="flex items-center gap-3 px-3 py-2 hover:bg-[#B89947]/5 cursor-pointer group transition-colors duration-200">
-            <input
-              type="checkbox"
-              className="w-4 h-4 border border-[#B89947]/30 bg-transparent cursor-pointer accent-[#B89947]"
-            />
-            <span className="text-[#767676] text-[9px] tracking-[0.2em] uppercase group-hover:text-[#B89947] transition-colors duration-200">
-              Tükenenler Dahil
-            </span>
-          </label>
-        </div>
-      </AccordionSection>
     </div>
   );
 }

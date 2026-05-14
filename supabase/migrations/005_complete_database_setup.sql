@@ -559,7 +559,7 @@ INSERT INTO store_settings (
   '00000000-0000-0000-0000-000000000001'::UUID,
   'Çırağan Elite Perde',
   'info@ciraganeliteperde.com',
-  '0532 295 95 86',
+  '0553 046 4659',
   5000.00,
   150.00,
   FALSE

@@ -21,7 +21,7 @@ export default function IadePolitikasiPage() {
               <p>
                 Siparişiniz <strong>üretim aşamasına geçmeden önce</strong> iptal edilebilir.
                 İptal talebi için info@ciraganelite.com adresine sipariş numaranızı belirterek
-                e-posta gönderin ya da 0532 295 95 86 numaralı WhatsApp hattımızdan bize ulaşın.
+                e-posta gönderin ya da 0553 046 4659 numaralı WhatsApp hattımızdan bize ulaşın.
               </p>
               <p>
                 Sipariş üretilmeye başlandıktan sonra iptal mümkün değildir; bu durumda

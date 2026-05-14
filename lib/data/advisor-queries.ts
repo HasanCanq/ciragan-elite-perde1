@@ -26,12 +26,10 @@ export type RoomModelEntry = Omit<RoomModelMapping, 'model_id'> & {
 // Prod'da hiçbir zaman kullanılmaz.
 
 const MOCK_ROOMS: Room[] = [
-  { id: 'm-1', name: 'Salon',       slug: 'salon',       icon_url: null, display_order: 1, is_active: true, created_at: '', updated_at: '' },
-  { id: 'm-2', name: 'Yatak Odası', slug: 'yatak-odasi', icon_url: null, display_order: 2, is_active: true, created_at: '', updated_at: '' },
-  { id: 'm-3', name: 'Mutfak',      slug: 'mutfak',      icon_url: null, display_order: 3, is_active: true, created_at: '', updated_at: '' },
-  { id: 'm-4', name: 'Çocuk Odası', slug: 'cocuk-odasi', icon_url: null, display_order: 4, is_active: true, created_at: '', updated_at: '' },
-  { id: 'm-5', name: 'Banyo',       slug: 'banyo',       icon_url: null, display_order: 5, is_active: true, created_at: '', updated_at: '' },
-  { id: 'm-6', name: 'Ofis',        slug: 'ofis',        icon_url: null, display_order: 6, is_active: true, created_at: '', updated_at: '' },
+  { id: 'm-1', name: 'Salon',       slug: 'salon',       icon_url: null, display_order: 1, is_active: true,  created_at: '', updated_at: '' },
+  { id: 'm-2', name: 'Yatak Odası', slug: 'yatak-odasi', icon_url: null, display_order: 2, is_active: true,  created_at: '', updated_at: '' },
+  { id: 'm-3', name: 'Mutfak',      slug: 'mutfak',      icon_url: null, display_order: 3, is_active: true,  created_at: '', updated_at: '' },
+  { id: 'm-6', name: 'Ofis',        slug: 'ofis',        icon_url: null, display_order: 4, is_active: true,  created_at: '', updated_at: '' },
 ];
 
 function mockCurtainModel(overrides: Partial<CurtainModel> & Pick<CurtainModel, 'id' | 'name' | 'slug' | 'max_width_cm' | 'max_height_cm'>): CurtainModel {
@@ -44,24 +42,23 @@ function mockCurtainModel(overrides: Partial<CurtainModel> & Pick<CurtainModel, 
 
 const MOCK_ROOM_MODELS: Record<string, RoomModelEntry[]> = {
   salon: [
-    { room_id: 'm-1', model_id: 'mm-1', marketing_text: 'Geniş salonunuza zarafet katın. Büyük cam yüzeyleri için mükemmel seçim.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-1', name: 'Kruvaze', slug: 'kruvaze', max_width_cm: 600, max_height_cm: 350 }) },
-    { room_id: 'm-1', model_id: 'mm-2', marketing_text: 'Isı yalıtımıyla kış aylarında enerji tasarrufu sağlar.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-2', name: 'Plicell', slug: 'plicell', max_width_cm: 500, max_height_cm: 300 }) },
-    { room_id: 'm-1', model_id: 'mm-3', marketing_text: 'Günün her saatinde ışığı kontrol edin; hem aydınlık hem mahrem.', display_order: 3, created_at: '', model: mockCurtainModel({ id: 'mm-3', name: 'Zebra', slug: 'zebra', max_width_cm: 350, max_height_cm: 280 }) },
+    { room_id: 'm-1', model_id: 'mm-9', marketing_text: 'Salonunuza doğal ahşap sıcaklığı katın; ışığı kademeli ayarlayın, zerafeti hissedin.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-9', name: 'Ahşap Jaluzi', slug: 'ahsap-jaluzi', max_width_cm: 300, max_height_cm: 280 }) },
+    { room_id: 'm-1', model_id: 'mm-3', marketing_text: 'Günün her saatinde ışığı kontrol edin; hem aydınlık hem mahrem.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-3', name: 'Zebra', slug: 'zebra', max_width_cm: 350, max_height_cm: 280 }) },
+    { room_id: 'm-1', model_id: 'mm-7', marketing_text: 'Salona derinlik ve zarafet katın; dışarıyı görerek mahremiyet sağlayın.', display_order: 3, created_at: '', model: mockCurtainModel({ id: 'mm-7', name: 'Tül', slug: 'tul', max_width_cm: 600, max_height_cm: 350 }) },
+    { room_id: 'm-1', model_id: 'mm-8', marketing_text: 'Sıcak kumaş dokusuyla salonunuza şıklık ve konfor katın.', display_order: 4, created_at: '', model: mockCurtainModel({ id: 'mm-8', name: 'Fon', slug: 'fon', max_width_cm: 600, max_height_cm: 350 }) },
   ],
   mutfak: [
     { room_id: 'm-3', model_id: 'mm-4', marketing_text: 'Ocak ateşine karşı güvenli ve kolay temizlenebilir özel kaplama.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-4', name: 'Stor', slug: 'stor', max_width_cm: 400, max_height_cm: 300 }) },
     { room_id: 'm-3', model_id: 'mm-3', marketing_text: 'Pratik kullanım, tek elle açıp kapama.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-3', name: 'Zebra', slug: 'zebra', max_width_cm: 350, max_height_cm: 280 }) },
     { room_id: 'm-3', model_id: 'mm-5', marketing_text: 'Alüminyum kanatlar buhara ve neme karşı dirençlidir.', display_order: 3, created_at: '', model: mockCurtainModel({ id: 'mm-5', name: 'Jaluzi', slug: 'jaluzi', max_width_cm: 300, max_height_cm: 280 }) },
+    { room_id: 'm-3', model_id: 'mm-2', marketing_text: 'Isı yalıtımıyla mutfak sıcaklığını dengeler; buhar ve koku geçişini azaltır.', display_order: 4, created_at: '', model: mockCurtainModel({ id: 'mm-2', name: 'Plicell', slug: 'plicell', max_width_cm: 500, max_height_cm: 300 }) },
   ],
   'yatak-odasi': [
-    { room_id: 'm-2', model_id: 'mm-6', marketing_text: 'Tam karartma ile kaliteli uyku. Vardiyalı çalışanlar için vazgeçilmez.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-6', name: 'Blackout', slug: 'blackout', max_width_cm: 400, max_height_cm: 300 }) },
-    { room_id: 'm-2', model_id: 'mm-1', marketing_text: 'Yumuşak kumaş dokusuyla yatak odanıza sıcaklık katın.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-1', name: 'Kruvaze', slug: 'kruvaze', max_width_cm: 600, max_height_cm: 350 }) },
+    { room_id: 'm-2', model_id: 'mm-6', marketing_text: 'Tam karartma ile kaliteli uyku. Vardiyalı çalışanlar ve bebekler için vazgeçilmez.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-6', name: 'Blackout', slug: 'blackout', max_width_cm: 400, max_height_cm: 300 }) },
+    { room_id: 'm-2', model_id: 'mm-10', marketing_text: 'Tam karartmalı rulo perde ile derin ve kesintisiz uyku. Vardiyalı çalışanlar ve bebekler için ideal.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-10', name: 'Blackout Stor', slug: 'blackout-stor', max_width_cm: 400, max_height_cm: 300 }) },
     { room_id: 'm-2', model_id: 'mm-2', marketing_text: 'Ses yalıtımıyla şehir gürültüsünü keser, daha sessiz uyku sağlar.', display_order: 3, created_at: '', model: mockCurtainModel({ id: 'mm-2', name: 'Plicell', slug: 'plicell', max_width_cm: 500, max_height_cm: 300 }) },
-  ],
-  'cocuk-odasi': [
-    { room_id: 'm-4', model_id: 'mm-6', marketing_text: 'Gündüz uyku saatlerinde tam karartma. Bebek ve çocuklar için güvenli kumaş.', display_order: 1, created_at: '', model: mockCurtainModel({ id: 'mm-6', name: 'Blackout', slug: 'blackout', max_width_cm: 400, max_height_cm: 300 }) },
-    { room_id: 'm-4', model_id: 'mm-4', marketing_text: 'Renkli ve eğlenceli desen seçenekleriyle çocuğunuzun odasına hayat katın.', display_order: 2, created_at: '', model: mockCurtainModel({ id: 'mm-4', name: 'Stor', slug: 'stor', max_width_cm: 400, max_height_cm: 300 }) },
-    { room_id: 'm-4', model_id: 'mm-1', marketing_text: 'Yumuşak ve güvenli kumaş.', display_order: 3, created_at: '', model: mockCurtainModel({ id: 'mm-1', name: 'Kruvaze', slug: 'kruvaze', max_width_cm: 600, max_height_cm: 350 }) },
+    { room_id: 'm-2', model_id: 'mm-7', marketing_text: 'Sabah ışığını içeri alırken göz kamaştırmadan yumuşatır.', display_order: 4, created_at: '', model: mockCurtainModel({ id: 'mm-7', name: 'Tül', slug: 'tul', max_width_cm: 600, max_height_cm: 350 }) },
+    { room_id: 'm-2', model_id: 'mm-8', marketing_text: 'Gün ışığını tamamen keser, huzurlu ve derin uyku sağlar.', display_order: 5, created_at: '', model: mockCurtainModel({ id: 'mm-8', name: 'Fon', slug: 'fon', max_width_cm: 600, max_height_cm: 350 }) },
   ],
 };
 

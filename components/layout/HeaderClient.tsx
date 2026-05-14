@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, User, ShoppingBag, Menu, X } from 'lucide-react';
+import { User, ShoppingBag, Menu, X } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useCartTotalItems } from '@/hooks/useCart';
 
@@ -81,14 +81,6 @@ export default function HeaderClient({ navItems }: { navItems: NavItem[] }) {
 
           {/* Icon group */}
           <div className="w-40 xl:w-48 shrink-0 flex items-center justify-end gap-0.5">
-            <button
-              type="button"
-              aria-label="Ara"
-              className="p-2.5 text-black hover:text-[#B89947] transition-colors duration-200"
-            >
-              <Search size={17} strokeWidth={1.4} aria-hidden="true" />
-            </button>
-
             <Link
               href="/account"
               aria-label="Hesabım"

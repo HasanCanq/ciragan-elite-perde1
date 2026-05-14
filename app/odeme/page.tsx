@@ -1384,8 +1384,8 @@ MADDE [Z] – SATICI İNİSİYATİFİ VE REVİZYON ŞARTLARI
 2. SATICI BİLGİLERİ
 Unvanı: Hanedan
 Adres: Atatürk, Estergon Cd. No:3, 34000 Ümraniye/İstanbul
-Telefon: 0532 295 95 86
-E-posta: info@hanedan.com.tr
+Telefon: 0553 046 4659
+E-posta: info@hanedanperde.com.tr
 
 3. ALICI BİLGİLERİ
 (Bu bölüm, form açıldığında sistem tarafından otomatik doldurulacaktır.)
@@ -1418,7 +1418,7 @@ SATICI, ürünleri "Kalite Kontrol Onaylı" barkodu ve kamera kaydı belgelemesi
             {/* TODO: KVKK Aydınlatma Metni içeriğini buraya ekleyin */}
             <p className="text-[#9C9286] text-xs italic">
               1. Veri Sorumlusu
-Kişisel verileriniz; veri sorumlusu sıfatıyla [Resmi Şirket Ünvanınız veya Adınız Soyadınız] (Hanedan) (Atatürk, Estergon Cd. No:3, 34000 Ümraniye/İstanbul — info@hanedan.com.tr — 0532 295 95 86) tarafından, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında işlenmektedir.
+Kişisel verileriniz; veri sorumlusu sıfatıyla [Resmi Şirket Ünvanınız veya Adınız Soyadınız] (Hanedan) (Atatürk, Estergon Cd. No:3, 34000 Ümraniye/İstanbul — info@hanedanperde.com.tr — 0553 046 4659) tarafından, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") kapsamında işlenmektedir.
 
 2. İşlenen Kişisel Verileriniz
 
@@ -1473,7 +1473,7 @@ Yetkili Kurumlar: Yasal yükümlülükler gereği talep edilmesi hâlinde resmi 
 7. İlgili Kişi Olarak Haklarınız (KVKK Madde 11)
 KVKK kapsamında; verilerinizin işlenip işlenmediğini öğrenme, işlenme amacını bilme, yurt içi/yurt dışı aktarım durumunu öğrenme, eksik/yanlış verilerin düzeltilmesini ve şartları oluştuğunda silinmesini talep etme haklarına sahipsiniz.
 
-Bu haklarınızı kullanmak için taleplerinizi info@hanedan.com.tr adresine güvenli elektronik imza ile veya kimliğinizi doğrulayan yazılı bir dilekçe ile iletebilirsiniz. Başvurularınız en geç 30 gün içinde ücretsiz olarak sonuçlandırılacaktır.
+Bu haklarınızı kullanmak için taleplerinizi info@hanedanperde.com.tr adresine güvenli elektronik imza ile veya kimliğinizi doğrulayan yazılı bir dilekçe ile iletebilirsiniz. Başvurularınız en geç 30 gün içinde ücretsiz olarak sonuçlandırılacaktır.
             </p>
           </div>
         )}

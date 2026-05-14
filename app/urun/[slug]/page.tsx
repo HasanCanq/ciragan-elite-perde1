@@ -3,6 +3,8 @@ import { notFound }      from 'next/navigation'
 import PDPGallery        from '@/components/product/PDPGallery'
 import PDPForm           from '@/components/product/PDPForm'
 import MeasurementForm   from '@/components/product/MeasurementForm'
+import ProductReviews    from '@/components/ProductReviews'
+import GoogleReviews     from '@/components/GoogleReviews'
 import Link              from 'next/link'
 import {
   getProductWithModelPublic,
@@ -10,6 +12,7 @@ import {
   getMeasurementGuide,
   getShopEnabled,
 } from '@/lib/data/public-queries'
+import { getProductRatingSummaryPublic } from '@/lib/data/google-reviews'
 import type { ModelLimits } from '@/components/product/MeasurementForm'
 import { JsonLd }               from '@/components/seo/JsonLd'
 import { ProductSchemaUpdater } from '@/components/seo/ProductSchemaUpdater'
@@ -92,9 +95,10 @@ export default async function ProductPage({ params }: Props) {
 
   // Ölçü kılavuzu → kategorinin guide_key'i varsa fetch et
   const guideKey = category?.measurement_guide_key ?? null
-  const [measurementGuide, shopEnabled] = await Promise.all([
+  const [measurementGuide, shopEnabled, ratingSummary] = await Promise.all([
     guideKey ? getMeasurementGuide(guideKey) : Promise.resolve(null),
     getShopEnabled(),
+    getProductRatingSummaryPublic(product.id),
   ])
 
   // Perde modeli sınırları → MeasurementForm dinamik Zod şeması için
@@ -131,6 +135,9 @@ export default async function ProductPage({ params }: Props) {
     in_stock:         product.in_stock,
     meta_description: product.meta_description,
     category,
+    aggregateRating:  ratingSummary.count > 0
+      ? { ratingValue: ratingSummary.average, reviewCount: ratingSummary.count }
+      : null,
   }
 
   const productSchema    = buildProductSchema(productSchemaInput)
@@ -255,6 +262,12 @@ export default async function ProductPage({ params }: Props) {
             />
           </div>
         </div>
+      </div>
+
+      {/* ── Yorumlar ───────────────────────────────────────── */}
+      <div className="h-container py-12 lg:py-16 space-y-12">
+        <GoogleReviews />
+        <ProductReviews productId={product.id} />
       </div>
     </>
   )

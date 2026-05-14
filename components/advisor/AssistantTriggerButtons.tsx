@@ -9,7 +9,7 @@ import { useAssistantStore } from '@/store/assistantStore';
    ──────────────────────────────────────────────────────────────
    Hero bölümüne yerleştirilen iki eylem butonu:
      • "Koleksiyonu İncele"  → tüm ürün sayfasına Link
-     • "Perdemi Seç"         → /asistan sayfasına yönlendirir
+     • "Perdeni Seç"         → /asistan sayfasına yönlendirir
                                ve modal state'i açar
    ────────────────────────────────────────────────────────────── */
 export default function AssistantTriggerButtons() {
@@ -52,7 +52,7 @@ export default function AssistantTriggerButtons() {
           <circle cx="10"  cy="12" r="1" fill="currentColor" stroke="none" />
           <circle cx="13"  cy="4"  r="0.7" fill="currentColor" stroke="none" />
         </svg>
-        Perdemi Seç
+        Perdeni Seç
       </button>
     </div>
   );
